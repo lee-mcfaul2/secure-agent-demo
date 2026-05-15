@@ -1,0 +1,36 @@
+name: chart-release
+
+on:
+  push:
+    tags: [ "chart-v*" ]
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Sync build artifacts into chart
+        run: |
+          mkdir -p chart/dashboards
+          cp dashboards/*.json chart/dashboards/
+          cp traffic_gen/traffic_gen.py chart/charts-local/traffic-gen/traffic_gen.py
+
+      - name: helm dependency update
+        run: cd chart && helm dependency update
+
+      - name: Package + push
+        run: |
+          helm package chart/
+          helm push ai-security-demo-*.tgz oci://ghcr.io/lee-mcfaul2/charts
