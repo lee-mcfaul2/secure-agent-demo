@@ -1,14 +1,64 @@
 .PHONY: help demo demo-down kind-up kind-down smoke traffic traffic-burst \
         sync-dashboards sync-traffic-gen dashboards-export logs ui-open grafana-open \
-        agentdojo e2e clean test
+        agentdojo e2e clean test preflight bootstrap
 
 KIND_CLUSTER ?= ai-security
 HELM_RELEASE ?= ai-security
 NAMESPACE    ?= platform
 SECRETS_FILE ?= chart/values-secrets.yaml
 
+# Project-local tool dir — bootstrapped binaries land here, no sudo, no system
+# pollution. Prepended to PATH for every recipe.
+LOCALBIN := $(CURDIR)/.bin
+export PATH := $(LOCALBIN):$(PATH)
+
+# Pinned tool versions (reproducible; KIND v0.24 node image is k8s 1.31).
+KIND_VERSION    ?= v0.24.0
+KUBECTL_VERSION ?= v1.31.4
+HELM_VERSION    ?= v3.16.3
+JQ_VERSION      ?= 1.7.1
+
+# OS/arch for download URLs.
+OS   := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+ARCH := $(shell uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+
 help: ## show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS=":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+#### Tooling bootstrap ####
+
+preflight: ## verify host tools that need a package manager (docker/curl/tar)
+	@missing=""; \
+	for t in docker curl tar; do command -v $$t >/dev/null 2>&1 || missing="$$missing $$t"; done; \
+	if [ -n "$$missing" ]; then \
+	  echo "ERROR: missing host tools:$$missing"; \
+	  echo "Install them first (these need your package manager / Docker Desktop):"; \
+	  echo "  Debian/Ubuntu : sudo apt-get install -y curl tar && install Docker Engine"; \
+	  echo "  macOS         : brew install curl && install Docker Desktop"; \
+	  exit 1; \
+	fi; \
+	docker info >/dev/null 2>&1 || { echo "ERROR: docker is installed but not running/usable. Start Docker and retry."; exit 1; }; \
+	echo "==> preflight OK (docker, curl, tar present; docker daemon reachable)"
+
+bootstrap: preflight ## auto-install kind/kubectl/helm/jq into ./.bin if missing
+	@mkdir -p $(LOCALBIN)
+	@if ! command -v kind >/dev/null 2>&1; then \
+	  echo "==> installing kind $(KIND_VERSION) -> $(LOCALBIN)"; \
+	  curl -fsSL -o $(LOCALBIN)/kind "https://kind.sigs.k8s.io/dl/$(KIND_VERSION)/kind-$(OS)-$(ARCH)" && chmod +x $(LOCALBIN)/kind; \
+	fi
+	@if ! command -v kubectl >/dev/null 2>&1; then \
+	  echo "==> installing kubectl $(KUBECTL_VERSION) -> $(LOCALBIN)"; \
+	  curl -fsSL -o $(LOCALBIN)/kubectl "https://dl.k8s.io/release/$(KUBECTL_VERSION)/bin/$(OS)/$(ARCH)/kubectl" && chmod +x $(LOCALBIN)/kubectl; \
+	fi
+	@if ! command -v helm >/dev/null 2>&1; then \
+	  echo "==> installing helm $(HELM_VERSION) -> $(LOCALBIN)"; \
+	  curl -fsSL "https://get.helm.sh/helm-$(HELM_VERSION)-$(OS)-$(ARCH).tar.gz" | tar -xz -C /tmp $(OS)-$(ARCH)/helm && mv /tmp/$(OS)-$(ARCH)/helm $(LOCALBIN)/helm && chmod +x $(LOCALBIN)/helm; \
+	fi
+	@if ! command -v jq >/dev/null 2>&1; then \
+	  echo "==> installing jq $(JQ_VERSION) -> $(LOCALBIN)"; \
+	  curl -fsSL -o $(LOCALBIN)/jq "https://github.com/jqlang/jq/releases/download/jq-$(JQ_VERSION)/jq-$(OS)-$(ARCH)" && chmod +x $(LOCALBIN)/jq; \
+	fi
+	@echo "==> bootstrap OK: $$(command -v kind) $$(command -v kubectl) $$(command -v helm) $$(command -v jq)"
 
 #### KIND ####
 
@@ -31,7 +81,7 @@ sync-traffic-gen: ## copy traffic_gen.py into the subchart so .Files.Get sees it
 
 #### Demo bring-up ####
 
-demo: kind-up sync-dashboards sync-traffic-gen ## bring up the full demo (turnkey — no manual setup)
+demo: bootstrap kind-up sync-dashboards sync-traffic-gen ## bring up the full demo (turnkey — no manual setup)
 	@if [ -f $(SECRETS_FILE) ]; then \
 	  echo "==> using operator-supplied $(SECRETS_FILE) (overrides baked-in demo key)"; \
 	else \
@@ -85,7 +135,7 @@ agentdojo: ## run AgentDojo against the running demo
 	@cd tests/agentdojo && python run_agentdojo.py --config config.yaml --out agentdojo-results.json
 	@python tests/agentdojo/score_gate.py tests/agentdojo/agentdojo-results.json tests/agentdojo/config.yaml
 
-e2e: kind-up sync-dashboards sync-traffic-gen ## full CI: bring up, run agentdojo, smoke
+e2e: bootstrap kind-up sync-dashboards sync-traffic-gen ## full CI: bring up, run agentdojo, smoke
 	@helm upgrade --install $(HELM_RELEASE) ./chart \
 	  --namespace $(NAMESPACE) --create-namespace \
 	  -f chart/values-demo.yaml \

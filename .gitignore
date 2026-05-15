@@ -10,3 +10,4 @@ __pycache__/
 .kube-cache/
 agentdojo-results.json
 agentdojo-summary.md
+.bin/
