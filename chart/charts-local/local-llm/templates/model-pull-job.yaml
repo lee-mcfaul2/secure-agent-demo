@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: local-llm-pull-{{ .Values.model | replace ":" "-" | replace "/" "-" }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "20"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: pull
+          image: curlimages/curl:8.10.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              echo "Waiting for Ollama to be ready..."
+              for i in $(seq 1 60); do
+                curl -fsS http://local-llm.{{ .Values.namespace }}.svc.cluster.local:11434/ && break
+                sleep 5
+              done
+              echo "Pulling model: {{ .Values.model }}"
+              curl -fsS -X POST \
+                http://local-llm.{{ .Values.namespace }}.svc.cluster.local:11434/api/pull \
+                -d '{"name":"{{ .Values.model }}","stream":false}'
+              echo "Model pull complete."

@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-llm
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: local-llm }
+  template:
+    metadata:
+      labels: { app: local-llm }
+      annotations:
+        linkerd.io/inject: disabled  # raw TCP, no need for mesh
+    spec:
+      containers:
+        - name: ollama
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: 11434 }
+          env:
+            - { name: OLLAMA_HOST,   value: "0.0.0.0:11434" }
+            - { name: OLLAMA_MODELS, value: "/models" }
+          volumeMounts:
+            - { name: models, mountPath: /models }
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: models
+          persistentVolumeClaim: { claimName: local-llm-models }

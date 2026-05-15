@@ -1,0 +1,16 @@
+namespace: platform
+image:
+  repository: ollama/ollama
+  tag: "0.4.0"
+  pullPolicy: IfNotPresent
+service:
+  port: 11434
+storage:
+  size: 5Gi
+model: "llama3.2:3b"
+resources:
+  requests: { cpu: "1", memory: "4Gi" }
+  limits:   { cpu: "4", memory: "8Gi" }
+networkPolicy:
+  allowedNamespaces:
+    - gateway

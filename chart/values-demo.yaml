@@ -4,7 +4,6 @@
 # Toggles for each subchart (matches the conditions in Chart.yaml)
 linkerd-control-plane: { enabled: true }
 spire:                  { enabled: true }
-local-llm:              { enabled: true }
 demo-ui:                { enabled: true }
 traffic-gen:            { enabled: true }
 
@@ -243,3 +242,9 @@ kube-prometheus-stack:
     enabled: true
     alertmanagerSpec:
       replicas: 1
+
+local-llm:
+  enabled: true
+  namespace: platform
+  model: "llama3.2:3b"
+
