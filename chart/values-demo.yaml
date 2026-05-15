@@ -5,7 +5,6 @@
 linkerd-control-plane: { enabled: true }
 spire:                  { enabled: true }
 kube-prometheus-stack:  { enabled: true }
-customer-db:            { enabled: true }
 pii-tokenizer:          { enabled: true }
 llm-guard:              { enabled: true }
 agent-gateway:          { enabled: true }
@@ -19,6 +18,19 @@ traffic-gen:            { enabled: true }
 # isn't sufficient (e.g., dex via its own values).
 # (Helm subchart namespace pinning isn't supported uniformly; we rely on
 # `helm install -n platform` for the umbrella + the namespace template above.)
+
+customer-db:
+  enabled: true
+  auth:
+    username: customers
+    password: customers-demo-pw
+    database: customers
+  primary:
+    persistence:
+      enabled: true
+      size: 1Gi
+    service:
+      type: ClusterIP
 
 dex:
   enabled: true

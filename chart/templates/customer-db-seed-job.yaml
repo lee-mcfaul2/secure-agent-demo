@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: customer-db-seed
+  namespace: platform
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      annotations:
+        linkerd.io/inject: disabled  # batch Job, no need for mesh sidecar
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: bitnami/postgresql:16
+          env:
+            - { name: PGHOST,     value: "customer-db-postgresql.platform.svc.cluster.local" }
+            - { name: PGUSER,     value: "customers" }
+            - { name: PGDATABASE, value: "customers" }
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: customer-db-postgresql
+                  key: password
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              echo "Waiting for Postgres..."
+              for i in $(seq 1 60); do
+                pg_isready -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" && break
+                sleep 2
+              done
+              echo "Running seed..."
+              psql -v ON_ERROR_STOP=1 -f /seed/seed.sql
+              echo "Seed complete."
+          volumeMounts:
+            - name: seed-sql
+              mountPath: /seed
+      volumes:
+        - name: seed-sql
+          configMap:
+            name: customer-db-seed-sql
