@@ -8,6 +8,13 @@ kubeVersion: ">=1.28.0"
 maintainers:
   - name: lee-mcfaul2
 dependencies:
+  # linkerd-crds MUST precede linkerd-control-plane: the control plane emits
+  # custom resources (servers.policy.linkerd.io, etc.) whose CRDs this chart
+  # registers. Helm's kind-sort installs CRDs ahead of CRs within one release.
+  - name: linkerd-crds
+    version: "1.6.1"
+    repository: https://helm.linkerd.io/stable
+    condition: linkerd-crds.enabled
   - name: linkerd-control-plane
     version: "1.16.11"
     repository: https://helm.linkerd.io/stable

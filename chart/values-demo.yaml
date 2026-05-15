@@ -2,6 +2,7 @@
 # All platform components enabled. Local Ollama LLM. Traffic generator runs.
 
 # Toggles for each subchart (matches the conditions in Chart.yaml)
+linkerd-crds: { enabled: true }   # must install before linkerd-control-plane
 # ============================================================================
 # ☢️  DEMO-ONLY LINKERD CA — committed private keys, on purpose. ☢️
 # The trust anchor + issuer below come from chart/demo-ca/ (see its README).
