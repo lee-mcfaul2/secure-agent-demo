@@ -1,0 +1,58 @@
+{
+  "uid": "ai-sec-agent-loop",
+  "title": "AI Security — Agent Loop",
+  "tags": ["ai-security", "agent"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "timeseries", "title": "finish_reason breakdown",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [{
+        "expr": "sum by (reason) (rate(sandbox_finish_reason_total[1m]))",
+        "refId": "A", "legendFormat": "{{reason}}"
+      }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 2, "type": "histogram", "title": "Iterations per request",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [{
+        "expr": "sum by (le) (rate(sandbox_iterations_per_request_bucket[5m]))",
+        "refId": "A"
+      }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "LLM call duration (p50/p95/p99)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(gateway_request_duration_seconds_bucket[5m])) by (le))", "refId": "A", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(gateway_request_duration_seconds_bucket[5m])) by (le))", "refId": "B", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(gateway_request_duration_seconds_bucket[5m])) by (le))", "refId": "C", "legendFormat": "p99" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 4, "type": "timeseries", "title": "Tool-call rate per (mcp, tool)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [{
+        "expr": "sum by (mcp, tool) (rate(gateway_tool_calls_total[1m]))",
+        "refId": "A", "legendFormat": "{{mcp}}/{{tool}}"
+      }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Token usage per request",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [{
+        "expr": "sum by (model) (rate(gateway_tokens_used_total[1m]))",
+        "refId": "A", "legendFormat": "{{model}}"
+      }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    }
+  ]
+}
