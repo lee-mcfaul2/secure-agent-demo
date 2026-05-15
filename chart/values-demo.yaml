@@ -4,7 +4,11 @@
 # Toggles for each subchart (matches the conditions in Chart.yaml)
 linkerd-control-plane: { enabled: true }
 spire:                  { enabled: true }
-traffic-gen:            { enabled: true }
+
+traffic-gen:
+  enabled: true
+  namespace: platform
+  intervalSeconds: 10
 
 # Subchart namespaces — used by Helm at install time when --create-namespace
 # isn't sufficient (e.g., dex via its own values).

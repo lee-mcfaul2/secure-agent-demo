@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-gen
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: traffic-gen } }
+  template:
+    metadata:
+      labels: { app: traffic-gen }
+    spec:
+      serviceAccountName: traffic-gen
+      containers:
+        - name: traffic
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              pip install --no-cache-dir httpx pyyaml >/dev/null
+              python /script/traffic_gen.py
+          env:
+            - { name: INTERVAL_SECONDS, value: "{{ .Values.intervalSeconds }}" }
+            - { name: GATEWAY_URL,      value: "{{ .Values.gatewayUrl }}" }
+            - { name: DEX_URL,          value: "{{ .Values.dexUrl }}" }
+            - { name: PROMPTS_PATH,     value: "/prompts/prompts.yaml" }
+          volumeMounts:
+            - { name: prompts, mountPath: /prompts }
+            - { name: script,  mountPath: /script  }
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: prompts
+          configMap: { name: traffic-gen-prompts }
+        - name: script
+          configMap: { name: traffic-gen-script }

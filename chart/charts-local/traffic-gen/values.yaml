@@ -1,0 +1,10 @@
+namespace: platform
+image:
+  repository: python
+  tag: "3.11-slim"
+intervalSeconds: 10           # mean; jittered ±50%
+gatewayUrl: "http://agent-gateway.gateway.svc.cluster.local:8080"
+dexUrl:     "http://dex.platform.svc.cluster.local:5556"
+resources:
+  requests: { cpu: "50m", memory: "128Mi" }
+  limits:   { cpu: "500m", memory: "256Mi" }
