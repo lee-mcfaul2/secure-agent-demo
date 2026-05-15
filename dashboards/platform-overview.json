@@ -1,0 +1,66 @@
+{
+  "uid": "ai-sec-platform",
+  "title": "AI Security — Platform Overview",
+  "tags": ["ai-security"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Requests / min",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(rate(gateway_requests_total[1m])) * 60", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Error %",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{
+        "expr": "100 * sum(rate(gateway_requests_total{outcome!=\"terminate\"}[5m])) / sum(rate(gateway_requests_total[5m]))",
+        "refId": "A"
+      }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 3, "type": "stat", "title": "p95 latency (s)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(gateway_request_duration_seconds_bucket[5m])) by (le))",
+        "refId": "A"
+      }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 4, "type": "stat", "title": "Active sandbox Jobs",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(kube_job_status_active{namespace=\"sandbox\"})", "refId": "A" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Requests by outcome",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [{ "expr": "sum by (outcome) (rate(gateway_requests_total[1m]))", "refId": "A", "legendFormat": "{{outcome}}" }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Tool calls by (mcp, tool, outcome)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [{
+        "expr": "sum by (mcp, tool, outcome) (rate(gateway_tool_calls_total[1m]))",
+        "refId": "A", "legendFormat": "{{mcp}}/{{tool}} ({{outcome}})"
+      }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Sandbox finish_reason",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "targets": [{
+        "expr": "sum by (reason) (rate(sandbox_finish_reason_total[1m]))",
+        "refId": "A", "legendFormat": "{{reason}}"
+      }],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    }
+  ]
+}
