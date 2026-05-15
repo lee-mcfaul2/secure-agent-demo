@@ -5,7 +5,6 @@
 linkerd-control-plane: { enabled: true }
 spire:                  { enabled: true }
 kube-prometheus-stack:  { enabled: true }
-agent-sandbox:          { enabled: true }
 agent-sql-mcp:          { enabled: true }
 local-llm:              { enabled: true }
 demo-ui:                { enabled: true }
@@ -157,3 +156,19 @@ agent-gateway:
   resources:
     requests: { cpu: "200m", memory: "512Mi" }
     limits:   { cpu: "2",    memory: "1Gi" }
+
+agent-sandbox:
+  enabled: true
+  # The sandbox chart ships a Pod template (NOT a Deployment) that the gateway's
+  # Job launcher uses. We provide the template's contents via values here.
+  podTemplate:
+    namespaceOverride: sandbox
+    bundlePvcName: prompt-bundle
+    bundlePvcNamespace: platform
+    litellmUrl: http://agent-gateway.gateway.svc.cluster.local:8080/litellm
+    mcps:
+      sql:
+        baseUrl: http://agent-sql-mcp.mcp.svc.cluster.local:8081
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits:   { cpu: "1",    memory: "1Gi" }
