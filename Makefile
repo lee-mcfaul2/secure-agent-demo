@@ -31,10 +31,11 @@ sync-traffic-gen: ## copy traffic_gen.py into the subchart so .Files.Get sees it
 
 #### Demo bring-up ####
 
-demo: kind-up sync-dashboards sync-traffic-gen ## bring up the full demo
-	@if [ ! -f $(SECRETS_FILE) ]; then \
-	  echo "ERROR: $(SECRETS_FILE) missing. Copy chart/values-secrets.example.yaml and fill k_master."; \
-	  exit 1; \
+demo: kind-up sync-dashboards sync-traffic-gen ## bring up the full demo (turnkey — no manual setup)
+	@if [ -f $(SECRETS_FILE) ]; then \
+	  echo "==> using operator-supplied $(SECRETS_FILE) (overrides baked-in demo key)"; \
+	else \
+	  echo "==> no $(SECRETS_FILE); using baked-in DEMO key (see chart/demo-secrets/README.md)"; \
 	fi
 	@echo "==> helm dependency update"
 	@cd chart && helm dependency update
@@ -42,7 +43,7 @@ demo: kind-up sync-dashboards sync-traffic-gen ## bring up the full demo
 	@helm upgrade --install $(HELM_RELEASE) ./chart \
 	  --namespace $(NAMESPACE) --create-namespace \
 	  -f chart/values-demo.yaml \
-	  -f $(SECRETS_FILE) \
+	  $(if $(wildcard $(SECRETS_FILE)),-f $(SECRETS_FILE),) \
 	  --timeout 10m \
 	  --wait
 	@echo "==> waiting for pods..."

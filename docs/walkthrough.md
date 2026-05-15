@@ -13,12 +13,15 @@ A guided tour of the platform's security layers. Estimated time: 15 minutes.
 ```bash
 git clone https://github.com/lee-mcfaul2/ai-security
 cd ai-security/secure-agent-demo
-cp chart/values-secrets.example.yaml chart/values-secrets.yaml
-# Edit chart/values-secrets.yaml — set pii-tokenizer.k_master to a 32-byte base64 value.
-# Example: echo "k_master: \"$(openssl rand -base64 32)\""
-
 make demo
 ```
+
+Turnkey — no setup. The demo ships with a baked-in throwaway
+`pii-tokenizer` master key and Linkerd CA (see `chart/demo-secrets/README.md`
+and `chart/demo-ca/README.md` — both are deliberate, loudly-flagged
+demo-only anti-patterns, never for reuse). To override with your own key,
+create `chart/values-secrets.yaml` (gitignored) with `pii-tokenizer.k_master`
+= `openssl rand -base64 32`; `make demo` layers it on automatically.
 
 This takes 5–8 minutes cold (downloads upstream charts + pulls llama3.2:3b) or
 ~2 minutes warm. When complete:

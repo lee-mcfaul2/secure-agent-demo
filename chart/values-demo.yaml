@@ -126,9 +126,17 @@ pii-tokenizer:
   namespaceOverride: platform
   service:
     port: 8080
-  # K_master comes from values-secrets.yaml.
-  # k_master injected via the chart's existing values mechanism.
-  k_master: ""  # will be overridden by values-secrets.yaml
+  # ==========================================================================
+  # ☢️  DEMO-ONLY TOKENIZER MASTER KEY — committed in plaintext, on purpose. ☢️
+  # This AES master key (chart/demo-secrets/k_master.txt, see its README) is
+  # baked in so `make demo` is genuinely turnkey — zero manual setup. Committing
+  # a tokenizer master key is a severe anti-pattern: anyone with this repo can
+  # decrypt every PII token it ever produces. It is acceptable ONLY because this
+  # is a throwaway local-KIND demo with no real data behind it. In production
+  # this comes from a KMS/HSM via go-kms-wrapping and is never in source.
+  # Override for anything real by passing -f chart/values-secrets.yaml.
+  # ==========================================================================
+  k_master: "PUXt6hTOiQQftmsJFgOtbWXz+vLCQ3NsRf+9qDwUQVY="
   redis:
     enabled: true
     persistence: { enabled: true, size: 500Mi }
