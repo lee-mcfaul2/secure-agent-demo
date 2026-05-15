@@ -4,7 +4,6 @@
 # Toggles for each subchart (matches the conditions in Chart.yaml)
 linkerd-control-plane: { enabled: true }
 spire:                  { enabled: true }
-kube-prometheus-stack:  { enabled: true }
 local-llm:              { enabled: true }
 demo-ui:                { enabled: true }
 traffic-gen:            { enabled: true }
@@ -204,3 +203,43 @@ agent-sql-mcp:
   resources:
     requests: { cpu: "100m", memory: "256Mi" }
     limits:   { cpu: "1",    memory: "512Mi" }
+
+kube-prometheus-stack:
+  enabled: true
+  fullnameOverride: kps
+  namespaceOverride: platform
+  prometheus:
+    prometheusSpec:
+      retention: 7d
+      retentionSize: 5GiB
+      # Pick up ServiceMonitors from ANY namespace (subcharts label theirs).
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+    service:
+      type: ClusterIP
+  grafana:
+    enabled: true
+    adminPassword: "prom-operator"
+    service:
+      type: NodePort
+      nodePort: 30090
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        labelValue: "1"
+        searchNamespace: ALL
+      datasources:
+        enabled: true
+    grafana.ini:
+      auth.anonymous:
+        enabled: true
+        org_role: Viewer
+    persistence:
+      enabled: true
+      size: 1Gi
+  alertmanager:
+    enabled: true
+    alertmanagerSpec:
+      replicas: 1
