@@ -5,7 +5,6 @@
 linkerd-control-plane: { enabled: true }
 spire:                  { enabled: true }
 kube-prometheus-stack:  { enabled: true }
-dex:                    { enabled: true }
 customer-db:            { enabled: true }
 pii-tokenizer:          { enabled: true }
 llm-guard:              { enabled: true }
@@ -15,3 +14,53 @@ agent-sql-mcp:          { enabled: true }
 local-llm:              { enabled: true }
 demo-ui:                { enabled: true }
 traffic-gen:            { enabled: true }
+
+# Subchart namespaces — used by Helm at install time when --create-namespace
+# isn't sufficient (e.g., dex via its own values).
+# (Helm subchart namespace pinning isn't supported uniformly; we rely on
+# `helm install -n platform` for the umbrella + the namespace template above.)
+
+dex:
+  enabled: true
+  ingress:
+    enabled: false
+  service:
+    type: NodePort
+    ports:
+      http:
+        port: 5556
+        nodePort: 30556
+  config:
+    issuer: http://dex.platform.svc.cluster.local:5556/dex
+    storage:
+      type: memory
+    web:
+      http: 0.0.0.0:5556
+    enablePasswordDB: true
+    oauth2:
+      passwordConnector: local
+    staticClients:
+      - id: demo-ui
+        name: Demo UI
+        secret: demo-secret
+        redirectURIs:
+          - "http://localhost:8080/callback"
+    staticPasswords:
+      - email: "alice@example.com"
+        hash: "$2a$10$2b2cu2GVqJ4dW0L0gZpW/.NDw3SeAFlmPnHsGCfsKsXezSpAfknNi"
+        username: alice
+        userID: "00000000-0000-0000-0000-000000000001"
+      - email: "bob@example.com"
+        hash: "$2a$10$2b2cu2GVqJ4dW0L0gZpW/.NDw3SeAFlmPnHsGCfsKsXezSpAfknNi"
+        username: bob
+        userID: "00000000-0000-0000-0000-000000000002"
+      - email: "carol@example.com"
+        hash: "$2a$10$2b2cu2GVqJ4dW0L0gZpW/.NDw3SeAFlmPnHsGCfsKsXezSpAfknNi"
+        username: carol
+        userID: "00000000-0000-0000-0000-000000000003"
+    # Demo user permissions are surfaced via the `groups` claim. The
+    # agent-gateway and agent-sql-mcp consume these as permission scopes.
+    # alice → full access. bob → no transactions, no atlantis. carol → KB only.
+    # (Dex doesn't natively support per-user claims; we use the password connector's
+    # group memberships via a static-groups extension at the OPA layer. The
+    # gateway maps groups→permissions via its existing perms.yaml.)
