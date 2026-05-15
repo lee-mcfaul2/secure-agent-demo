@@ -1,0 +1,64 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ai-security-alerts
+  namespace: platform
+  labels:
+    release: ai-security              # picked up by kube-prometheus-stack's ruleSelector
+spec:
+  groups:
+    - name: ai-security.security
+      interval: 30s
+      rules:
+        - alert: LLMGuardDisabled
+          expr: gateway_llm_guard_enabled == 0
+          for: 1m
+          labels: { severity: page, classification: security }
+          annotations:
+            summary: "LLM Guard disabled in agent-gateway"
+            description: "Gateway pod has llm_guard.enabled=false. Agent prompts flowing without scanning. See agent-gateway/docs/failure-modes.md → LLMGuardDisabled."
+
+        - alert: LLMGuardScannerErrors
+          expr: rate(llm_guard_scanner_errors_total[5m]) > 0
+          for: 2m
+          labels: { severity: page, classification: security }
+          annotations:
+            summary: "LLM Guard scanner returning errors"
+            description: "Fail-closed policy is denying prompts. Check llm-guard pod health."
+
+        - alert: TokenizerDecryptFailures
+          expr: rate(pii_tokenizer_failed_decryptions_total[5m]) > 0
+          for: 2m
+          labels: { severity: page, classification: security }
+          annotations:
+            summary: "pii-tokenizer decrypt failures"
+            description: "Possible K_master mismatch or tampering."
+
+        - alert: SandboxSchemaMismatch
+          expr: rate(sandbox_response_schema_mismatch_total[5m]) > 0
+          for: 1m
+          labels: { severity: page, classification: integrity }
+          annotations:
+            summary: "Sandbox response-schema mismatch"
+            description: "Bundle version skew? Check bundle digest endpoint."
+
+    - name: ai-security.reliability
+      interval: 30s
+      rules:
+        - alert: HighIterationCapRate
+          expr: |
+            rate(sandbox_finish_reason_total{reason="iteration_cap"}[10m])
+              / rate(gateway_requests_total[10m]) > 0.1
+          for: 10m
+          labels: { severity: ticket }
+          annotations:
+            summary: "High rate of sandbox iteration-cap terminations"
+            description: ">10% of requests are hitting the iteration cap. Investigate runaway-loop pattern."
+
+        - alert: SlowLLMCalls
+          expr: histogram_quantile(0.95, sum(rate(gateway_request_duration_seconds_bucket[5m])) by (le)) > 10
+          for: 10m
+          labels: { severity: ticket }
+          annotations:
+            summary: "Gateway p95 request duration > 10s"
+            description: "LLM upstream slow? Check LiteLLM and local-llm pod health."
