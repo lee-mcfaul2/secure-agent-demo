@@ -55,7 +55,7 @@ demo-down: kind-down ## tear down
 #### Operations ####
 
 ui-open: ## open the UI in your default browser
-	@xdg-open http://localhost:8080 || open http://localhost:8080 || true
+	@xdg-open http://localhost:8081 || open http://localhost:8081 || true
 
 grafana-open: ## open Grafana
 	@xdg-open http://localhost:3000 || open http://localhost:3000 || true

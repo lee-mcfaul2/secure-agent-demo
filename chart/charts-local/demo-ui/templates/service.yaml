@@ -4,7 +4,7 @@ metadata:
   name: demo-ui
   namespace: {{ .Values.namespace }}
 spec:
-  type: NodePort
+  type: ClusterIP
   selector: { app: demo-ui }
   ports:
-    - { name: http, port: {{ .Values.service.port }}, targetPort: http, nodePort: {{ .Values.service.nodePort }} }
+    - { name: http, port: {{ .Values.service.port }}, targetPort: http }

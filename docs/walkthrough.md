@@ -23,7 +23,7 @@ make demo
 This takes 5–8 minutes cold (downloads upstream charts + pulls llama3.2:3b) or
 ~2 minutes warm. When complete:
 
-- UI: http://localhost:8080
+- UI: http://localhost:8081
 - Grafana: http://localhost:3000 (anonymous read; admin/`prom-operator` to edit)
 - Dex: http://localhost:5556
 
