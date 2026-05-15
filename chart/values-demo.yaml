@@ -5,7 +5,6 @@
 linkerd-control-plane: { enabled: true }
 spire:                  { enabled: true }
 kube-prometheus-stack:  { enabled: true }
-agent-gateway:          { enabled: true }
 agent-sandbox:          { enabled: true }
 agent-sql-mcp:          { enabled: true }
 local-llm:              { enabled: true }
@@ -122,3 +121,39 @@ llm-guard:
   resources:
     requests: { cpu: "500m", memory: "1Gi" }
     limits:   { cpu: "2",    memory: "4Gi" }
+
+agent-gateway:
+  enabled: true
+  replicaCount: 2
+  namespaceOverride: gateway
+  service:
+    type: NodePort
+    port: 8080
+    nodePort: 30080  # matches kind/demo-cluster.yaml extraPortMappings → host:8080
+  bundle:
+    pvcName: prompt-bundle      # mounted from platform.svc
+    pvcNamespace: platform
+    mountPath: /var/lib/prompts
+  llmGuard:
+    enabled: true
+    baseUrl: http://llm-guard.platform.svc.cluster.local:8000
+  tokenizer:
+    baseUrl: http://pii-tokenizer.platform.svc.cluster.local:8080
+  oidc:
+    issuer: http://dex.platform.svc.cluster.local:5556/dex
+    audience: demo-ui
+    jwksRefreshSeconds: 60
+  litellm:
+    mode: ollama  # other modes: anthropic, mock (CI)
+    # Detailed model_list configured in T15 once local-llm subchart exists.
+  models:
+    allowed_models:
+      - claude-sonnet-4-6
+      - llama3.2
+    default_model: claude-sonnet-4-6
+  serviceMonitor:
+    enabled: true
+    namespace: gateway
+  resources:
+    requests: { cpu: "200m", memory: "512Mi" }
+    limits:   { cpu: "2",    memory: "1Gi" }
