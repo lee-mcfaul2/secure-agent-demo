@@ -1,16 +1,25 @@
-.PHONY: help demo demo-down smoke traffic-burst
+.PHONY: help demo demo-down smoke kind-up kind-down traffic-burst
+
+KIND_CLUSTER ?= ai-security
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS=":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-demo: ## bring up the full demo on a local KIND cluster
-	@echo "demo target not yet implemented"; exit 1
+kind-up: ## create the KIND cluster
+	@kind get clusters 2>/dev/null | grep -q "^$(KIND_CLUSTER)$$" || \
+		kind create cluster --config kind/demo-cluster.yaml
+	@kubectl apply -f kind/metrics-server.yaml
 
-demo-down: ## tear down (kind delete cluster)
-	@kind delete cluster --name ai-security || true
+kind-down: ## delete the KIND cluster
+	@kind delete cluster --name $(KIND_CLUSTER) || true
+
+demo: kind-up ## bring up the full demo on a local KIND cluster
+	@echo "TODO: helm install (added in T26)"
+
+demo-down: kind-down ## tear down (kind delete cluster)
 
 smoke: ## run smoke-test script
-	@echo "smoke target not yet implemented"; exit 1
+	@echo "smoke target not yet implemented (added in T25)"; exit 1
 
 traffic-burst: ## fire 50 prompts now (mix of legit + adversarial)
 	@echo "traffic-burst target not yet implemented"; exit 1
