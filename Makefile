@@ -22,8 +22,8 @@ demo: kind-up sync-dashboards ## bring up the full demo on a local KIND cluster
 
 demo-down: kind-down ## tear down (kind delete cluster)
 
-smoke: ## run smoke-test script
-	@echo "smoke target not yet implemented (added in T25)"; exit 1
+smoke: ## run smoke-test script (happy path + blocked attack)
+	@scripts/smoke.sh
 
 traffic: ## show whether traffic-gen pod is enabled
 	@kubectl -n platform get deployment traffic-gen 2>&1 | tail -5
