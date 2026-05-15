@@ -1,4 +1,4 @@
-.PHONY: help demo demo-down smoke kind-up kind-down traffic-burst
+.PHONY: help demo demo-down smoke kind-up kind-down traffic traffic-burst
 
 KIND_CLUSTER ?= ai-security
 
@@ -21,5 +21,8 @@ demo-down: kind-down ## tear down (kind delete cluster)
 smoke: ## run smoke-test script
 	@echo "smoke target not yet implemented (added in T25)"; exit 1
 
+traffic: ## show whether traffic-gen pod is enabled
+	@kubectl -n platform get deployment traffic-gen 2>&1 | tail -5
+
 traffic-burst: ## fire 50 prompts now (mix of legit + adversarial)
-	@echo "traffic-burst target not yet implemented"; exit 1
+	@scripts/traffic-burst.sh 50
