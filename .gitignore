@@ -1,0 +1,11 @@
+chart/values-secrets.yaml
+chart/charts/*.tgz
+chart/Chart.lock
+.helmignore.bak
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.kube-cache/
+agentdojo-results.json
+agentdojo-summary.md
