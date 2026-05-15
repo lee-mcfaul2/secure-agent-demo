@@ -1,4 +1,4 @@
-.PHONY: help demo demo-down smoke
+.PHONY: help demo demo-down smoke traffic-burst
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS=":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -11,3 +11,6 @@ demo-down: ## tear down (kind delete cluster)
 
 smoke: ## run smoke-test script
 	@echo "smoke target not yet implemented"; exit 1
+
+traffic-burst: ## fire 50 prompts now (mix of legit + adversarial)
+	@echo "traffic-burst target not yet implemented"; exit 1
