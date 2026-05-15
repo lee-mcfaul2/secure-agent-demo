@@ -1,6 +1,7 @@
 chart/values-secrets.yaml
 chart/charts/*.tgz
 chart/Chart.lock
+chart/dashboards/
 .helmignore.bak
 __pycache__/
 *.pyc
