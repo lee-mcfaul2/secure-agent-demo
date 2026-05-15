@@ -1,3 +1,8 @@
+# Single node: lighter (one kubelet, far less RAM) and much more likely to
+# come up on constrained / unusual hosts. KIND removes the control-plane
+# NoSchedule taint on single-node clusters, so demo workloads schedule here.
+# (The original 3-node layout was for realistic cross-node mesh coverage; not
+# worth the resource cost for a local demo.)
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: ai-security
@@ -6,5 +11,3 @@ nodes:
     extraPortMappings:
       - { containerPort: 30080, hostPort: 8080, protocol: TCP }
       - { containerPort: 30090, hostPort: 3000, protocol: TCP }
-  - role: worker
-  - role: worker

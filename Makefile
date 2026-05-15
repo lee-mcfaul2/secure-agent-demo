@@ -66,6 +66,20 @@ preflight: ## verify a container runtime + curl/tar (real guidance, no fake comm
 	  echo "  Docker Desktop (mac)  : https://www.docker.com/products/docker-desktop/"; \
 	  echo "  Podman                : https://podman.io/docs/installation"; \
 	  exit 1; \
+	fi; \
+	if [ -r /proc/sys/fs/inotify/max_user_instances ]; then \
+	  ins=$$(cat /proc/sys/fs/inotify/max_user_instances 2>/dev/null || echo 0); \
+	  wat=$$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null || echo 0); \
+	  if [ "$$ins" -lt 512 ] || [ "$$wat" -lt 524288 ]; then \
+	    echo ""; \
+	    echo "WARNING: low inotify limits (instances=$$ins watches=$$wat)."; \
+	    echo "This is the #1 cause of KIND failing at 'Starting control-plane'"; \
+	    echo "with 'kubelet is not healthy'. Raise them (host-level, needs root):"; \
+	    echo "  sudo sysctl fs.inotify.max_user_instances=8192"; \
+	    echo "  sudo sysctl fs.inotify.max_user_watches=1048576"; \
+	    echo "Persist in /etc/sysctl.d/99-kind.conf. Continuing anyway..."; \
+	    echo ""; \
+	  fi; \
 	fi
 
 bootstrap: preflight ## auto-install kind/kubectl/helm/jq into ./.bin if missing

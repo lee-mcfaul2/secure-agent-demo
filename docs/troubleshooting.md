@@ -95,3 +95,38 @@ No. The demo is fully isolated from any other cluster on the machine:
 
 To inspect the demo cluster manually:
 `KUBECONFIG=.kube/demo.config kubectl get pods -A`
+
+## "KIND fails at 'Starting control-plane' / kubelet is not healthy after 4m"
+
+This is a host-environment problem with KIND itself (not the chart). The node
+container boots but its kubelet never goes healthy, so `kubeadm init` times
+out. In rough order of likelihood:
+
+1. **Low inotify limits** (the most common). `make preflight` now warns about
+   this. Fix on the host (needs root), then re-run:
+   ```bash
+   sudo sysctl fs.inotify.max_user_instances=8192
+   sudo sysctl fs.inotify.max_user_watches=1048576
+   # persist:
+   echo -e "fs.inotify.max_user_instances=8192\nfs.inotify.max_user_watches=1048576" \
+     | sudo tee /etc/sysctl.d/99-kind.conf
+   ```
+
+2. **Not enough memory.** The cluster is now single-node to minimize this, but
+   the control plane + etcd still need ~2 GB free before any workloads. Close
+   other things, or check `free -m` / `docker info | grep -i memory`.
+
+3. **cgroup v2 / nested-container issues.** If you're running inside an LXC
+   container, a restricted VM, or WSL2 without systemd, the node container may
+   not get the cgroup delegation kubelet needs. KIND's notes:
+   https://kind.sigs.k8s.io/docs/user/known-issues/ — the cgroup v2 and
+   "Pod errors due to too many open files" sections are the relevant ones.
+
+4. **`sudo make demo` vs. earlier non-sudo runs.** If you bootstrapped or ran
+   without `sudo` before and are now using `sudo`, you may be talking to a
+   *different* Docker (root's vs. rootless). Pick one and stay consistent:
+   if your Docker is rootless and works without sudo, run `make demo` without
+   sudo; the `.bin`/`.kube` dirs will just be owned by your user.
+
+After changing host sysctls or freeing memory:
+`make demo-down && make demo` (demo-down clears the half-created cluster).
