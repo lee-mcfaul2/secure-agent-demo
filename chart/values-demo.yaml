@@ -5,7 +5,6 @@
 linkerd-control-plane: { enabled: true }
 spire:                  { enabled: true }
 kube-prometheus-stack:  { enabled: true }
-llm-guard:              { enabled: true }
 agent-gateway:          { enabled: true }
 agent-sandbox:          { enabled: true }
 agent-sql-mcp:          { enabled: true }
@@ -98,3 +97,28 @@ pii-tokenizer:
   resources:
     requests: { cpu: "100m", memory: "256Mi" }
     limits:   { cpu: "1",    memory: "512Mi" }
+
+llm-guard:
+  enabled: true
+  replicaCount: 1
+  namespaceOverride: platform
+  service:
+    port: 8000
+  piiTypes:
+    # Mount the platform-level pii-types ConfigMap (defined in T7).
+    configMapName: pii-types
+    mountPath: /etc/llm-guard
+  scanners:
+    promptInjection: { enabled: true,  threshold: 0.8 }
+    toxicity:        { enabled: true,  threshold: 0.7 }
+    secrets:         { enabled: true }
+  failClosed: true  # per workspace memory ai_security_fail_closed_default
+  networkPolicy:
+    allowedNamespaces:
+      - gateway
+  serviceMonitor:
+    enabled: true
+    namespace: platform
+  resources:
+    requests: { cpu: "500m", memory: "1Gi" }
+    limits:   { cpu: "2",    memory: "4Gi" }
