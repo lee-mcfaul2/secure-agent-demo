@@ -5,5 +5,4 @@ metadata:
   namespace: {{ .Values.namespace }}
 data:
   traffic_gen.py: |
-    # Populated in T18 — this placeholder lets the chart render until then.
-    print("traffic-gen placeholder; replaced in T18")
+{{ .Files.Get "traffic_gen.py" | indent 4 }}
