@@ -140,8 +140,16 @@ agent-gateway:
     audience: demo-ui
     jwksRefreshSeconds: 60
   litellm:
-    mode: ollama  # other modes: anthropic, mock (CI)
-    # Detailed model_list configured in T15 once local-llm subchart exists.
+    mode: ollama
+    model_list:
+      - model_name: "claude-sonnet-4-6"   # gateway's default_model; sandbox sees only this name
+        litellm_params:
+          model: "ollama_chat/llama3.2:3b"
+          api_base: "http://local-llm.platform.svc.cluster.local:11434"
+      - model_name: "llama3.2"
+        litellm_params:
+          model: "ollama_chat/llama3.2:3b"
+          api_base: "http://local-llm.platform.svc.cluster.local:11434"
   models:
     allowed_models:
       - claude-sonnet-4-6
