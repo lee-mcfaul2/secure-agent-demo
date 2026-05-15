@@ -1,0 +1,17 @@
+# values-ci.yaml — overlay for CI bring-up.
+# Disables demo-ui + traffic-gen + local-llm (uses LiteLLM mock mode instead).
+
+demo-ui:     { enabled: false }
+traffic-gen: { enabled: false }
+local-llm:   { enabled: false }
+
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      retention: 1h
+      retentionSize: 1GiB
+
+# LiteLLM mock mode — agent-gateway will be re-pointed to this in T15.
+agent-gateway:
+  litellm:
+    mode: mock

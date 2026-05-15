@@ -1,0 +1,17 @@
+# values-demo.yaml — defaults for the local walkthrough demo.
+# All platform components enabled. Local Ollama LLM. Traffic generator runs.
+
+# Toggles for each subchart (matches the conditions in Chart.yaml)
+linkerd-control-plane: { enabled: true }
+spire:                  { enabled: true }
+kube-prometheus-stack:  { enabled: true }
+dex:                    { enabled: true }
+customer-db:            { enabled: true }
+pii-tokenizer:          { enabled: true }
+llm-guard:              { enabled: true }
+agent-gateway:          { enabled: true }
+agent-sandbox:          { enabled: true }
+agent-sql-mcp:          { enabled: true }
+local-llm:              { enabled: true }
+demo-ui:                { enabled: true }
+traffic-gen:            { enabled: true }

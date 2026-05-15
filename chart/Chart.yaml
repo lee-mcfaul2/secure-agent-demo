@@ -1,0 +1,63 @@
+apiVersion: v2
+name: ai-security-demo
+description: Umbrella chart for the AI Agent Security Platform demo
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.28.0"
+maintainers:
+  - name: lee-mcfaul2
+dependencies:
+  - name: linkerd-control-plane
+    version: "2025.5.x"
+    repository: https://helm.linkerd.io/stable
+    condition: linkerd-control-plane.enabled
+  - name: spire
+    version: "0.21.x"
+    repository: https://spiffe.github.io/helm-charts-hardened/
+    condition: spire.enabled
+  - name: kube-prometheus-stack
+    version: "65.x"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: kube-prometheus-stack.enabled
+  - name: dex
+    version: "0.19.x"
+    repository: https://charts.dexidp.io
+    condition: dex.enabled
+  - name: postgresql
+    version: "16.x"
+    repository: https://charts.bitnami.com/bitnami
+    alias: customer-db
+    condition: customer-db.enabled
+  - name: pii-tokenizer
+    version: "0.1.0"
+    repository: oci://ghcr.io/lee-mcfaul2/charts
+    condition: pii-tokenizer.enabled
+  - name: llm-guard
+    version: "0.1.0"
+    repository: oci://ghcr.io/lee-mcfaul2/charts
+    condition: llm-guard.enabled
+  - name: agent-gateway
+    version: "0.1.0"
+    repository: oci://ghcr.io/lee-mcfaul2/charts
+    condition: agent-gateway.enabled
+  - name: agent-sandbox
+    version: "0.1.0"
+    repository: oci://ghcr.io/lee-mcfaul2/charts
+    condition: agent-sandbox.enabled
+  - name: agent-sql-mcp
+    version: "0.1.0"
+    repository: oci://ghcr.io/lee-mcfaul2/charts
+    condition: agent-sql-mcp.enabled
+  - name: local-llm
+    version: "0.1.0"
+    repository: "file://./charts-local/local-llm"
+    condition: local-llm.enabled
+  - name: demo-ui
+    version: "0.1.0"
+    repository: "file://./charts-local/demo-ui"
+    condition: demo-ui.enabled
+  - name: traffic-gen
+    version: "0.1.0"
+    repository: "file://./charts-local/traffic-gen"
+    condition: traffic-gen.enabled
