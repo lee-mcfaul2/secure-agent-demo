@@ -1,3 +1,14 @@
+# ============================================================================
+# ☢️  DEMO-ONLY PROMPT BUNDLE — committed fixture, NOT a verified signed bundle.
+# In the real platform this PVC is populated by cosign-verifying and pulling the
+# signed lib-agent-prompt OCI bundle (supply-chain integrity is the whole point).
+# Here we ship lib-agent-prompt's example bundle as a committed fixture and seed
+# the PVC from it, because the signed OCI bundle is not published. Same
+# friction-vs-correctness, demo-only trade-off as chart/demo-ca and
+# chart/demo-secrets — see chart/demo-bundle/README.md. NEVER ship like this.
+# The seed Job is best-effort (always exits 0) so a bundle/consumer-shape
+# mismatch surfaces as a localized pod failure, not a wedged pre-install hook.
+# ============================================================================
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -9,6 +20,18 @@ spec:
     requests:
       storage: 200Mi
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prompt-bundle-fixture
+  namespace: platform
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+binaryData:
+  bundle.tgz: {{ .Files.Get "demo-bundle/bundle.tgz" | b64enc }}
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -19,40 +42,39 @@ metadata:
     "helm.sh/hook-weight": "-5"
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
-  backoffLimit: 3
+  backoffLimit: 1
   template:
     metadata:
       annotations:
         linkerd.io/inject: disabled
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: Never
       containers:
-        - name: pull-and-verify
-          image: ghcr.io/sigstore/cosign/cosign:v2.4.1
+        - name: seed-bundle
+          image: alpine:3.20
           command: ["/bin/sh", "-c"]
           args:
             - |
-              set -e
-              cd /work
-              BUNDLE_REF="ghcr.io/lee-mcfaul2/lib-agent-prompt:v1.0.0"
-              echo "Pulling bundle: $BUNDLE_REF"
-              cosign verify \
-                --certificate-identity-regexp 'https://github.com/lee-mcfaul2/.*' \
-                --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-                "$BUNDLE_REF"
-              # cosign download artifact extracts to ./bundle.tgz
-              cosign download attestation "$BUNDLE_REF" > /work/attestation.json || true
-              # Use oras (built into cosign image) to pull the actual layer
-              oras pull "$BUNDLE_REF" -o /work/
-              tar -xzf /work/bundle.tgz -C /work/bundle/
-              echo "Bundle extracted."
-              ls -la /work/bundle/
+              # Best-effort: never fail the install. If the fixture is missing
+              # or its shape doesn't match a consumer, that consumer fails on
+              # its own (localized + diagnosable) rather than wedging here.
+              set +e
+              mkdir -p /bundle
+              if [ -f /fixture/bundle.tgz ]; then
+                tar -xzf /fixture/bundle.tgz -C /bundle && \
+                  echo "seeded prompt-bundle PVC from committed demo fixture:" && \
+                  ls -laR /bundle | head -40
+              else
+                echo "WARN: /fixture/bundle.tgz missing; leaving PVC empty"
+              fi
+              exit 0
           volumeMounts:
-            - { name: workspace, mountPath: /work }
-            - { name: bundle,    mountPath: /work/bundle }
+            - { name: fixture, mountPath: /fixture }
+            - { name: bundle,  mountPath: /bundle  }
       volumes:
-        - name: workspace
-          emptyDir: {}
+        - name: fixture
+          configMap:
+            name: prompt-bundle-fixture
         - name: bundle
           persistentVolumeClaim:
             claimName: prompt-bundle
