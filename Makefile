@@ -27,18 +27,38 @@ help: ## show this help
 
 #### Tooling bootstrap ####
 
-preflight: ## verify host tools that need a package manager (docker/curl/tar)
+preflight: ## verify a container runtime + curl/tar (real guidance, no fake commands)
 	@missing=""; \
-	for t in docker curl tar; do command -v $$t >/dev/null 2>&1 || missing="$$missing $$t"; done; \
+	for t in curl tar; do command -v $$t >/dev/null 2>&1 || missing="$$missing $$t"; done; \
 	if [ -n "$$missing" ]; then \
-	  echo "ERROR: missing host tools:$$missing"; \
-	  echo "Install them first (these need your package manager / Docker Desktop):"; \
-	  echo "  Debian/Ubuntu : sudo apt-get install -y curl tar && install Docker Engine"; \
-	  echo "  macOS         : brew install curl && install Docker Desktop"; \
+	  echo "ERROR: missing:$$missing"; \
+	  echo "  Debian/Ubuntu : sudo apt-get update && sudo apt-get install -y$$missing"; \
+	  echo "  Fedora/RHEL   : sudo dnf install -y$$missing"; \
+	  echo "  macOS         : these ship with macOS; if not, 'brew install$$missing'"; \
 	  exit 1; \
 	fi; \
-	docker info >/dev/null 2>&1 || { echo "ERROR: docker is installed but not running/usable. Start Docker and retry."; exit 1; }; \
-	echo "==> preflight OK (docker, curl, tar present; docker daemon reachable)"
+	if docker info >/dev/null 2>&1; then \
+	  echo "==> preflight OK (docker runtime reachable; curl, tar present)"; \
+	elif podman info >/dev/null 2>&1; then \
+	  echo "==> preflight OK (podman runtime reachable; curl, tar present)"; \
+	  echo "    note: KIND will use podman (export KIND_EXPERIMENTAL_PROVIDER=podman)"; \
+	else \
+	  echo "ERROR: no working container runtime found (need a reachable docker OR podman)."; \
+	  echo ""; \
+	  echo "If you DO have Docker but see this: the 'docker' command is not on PATH"; \
+	  echo "for non-interactive shells (common when it's a shell alias/function, a"; \
+	  echo "snap, or Docker Desktop CLI integration). Make runs recipes via /bin/sh,"; \
+	  echo "which does not load your shell rc. Fix by either:"; \
+	  echo "  - ensuring the real docker binary's dir is on PATH, e.g.:"; \
+	  echo "      make demo PATH=\"\$$(dirname \$$(command -v docker)):\$$PATH\""; \
+	  echo "  - or run:  which docker   and add that dir to PATH in your environment"; \
+	  echo ""; \
+	  echo "To install a runtime from scratch (these are docs pages, not commands):"; \
+	  echo "  Docker Engine (Linux) : https://docs.docker.com/engine/install/"; \
+	  echo "  Docker Desktop (mac)  : https://www.docker.com/products/docker-desktop/"; \
+	  echo "  Podman                : https://podman.io/docs/installation"; \
+	  exit 1; \
+	fi
 
 bootstrap: preflight ## auto-install kind/kubectl/helm/jq into ./.bin if missing
 	@mkdir -p $(LOCALBIN)
@@ -63,8 +83,11 @@ bootstrap: preflight ## auto-install kind/kubectl/helm/jq into ./.bin if missing
 #### KIND ####
 
 kind-up: ## create the KIND cluster if missing
-	@kind get clusters 2>/dev/null | grep -q "^$(KIND_CLUSTER)$$" || \
-		kind create cluster --config kind/demo-cluster.yaml
+	@if docker info >/dev/null 2>&1; then PROV=""; \
+	 elif podman info >/dev/null 2>&1; then PROV="KIND_EXPERIMENTAL_PROVIDER=podman"; \
+	 else echo "ERROR: no container runtime (run 'make preflight' for guidance)"; exit 1; fi; \
+	 env $$PROV kind get clusters 2>/dev/null | grep -q "^$(KIND_CLUSTER)$$" || \
+	   env $$PROV kind create cluster --config kind/demo-cluster.yaml
 	@kubectl apply -f kind/metrics-server.yaml
 
 kind-down: ## delete the KIND cluster
