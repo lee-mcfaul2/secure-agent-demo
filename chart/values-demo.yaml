@@ -5,7 +5,6 @@
 linkerd-control-plane: { enabled: true }
 spire:                  { enabled: true }
 kube-prometheus-stack:  { enabled: true }
-agent-sql-mcp:          { enabled: true }
 local-llm:              { enabled: true }
 demo-ui:                { enabled: true }
 traffic-gen:            { enabled: true }
@@ -172,3 +171,36 @@ agent-sandbox:
     resources:
       requests: { cpu: "100m", memory: "256Mi" }
       limits:   { cpu: "1",    memory: "1Gi" }
+
+agent-sql-mcp:
+  enabled: true
+  replicaCount: 1
+  namespaceOverride: mcp
+  service:
+    port: 8081
+  database:
+    host: customer-db-postgresql.platform.svc.cluster.local
+    port: 5432
+    user: customers
+    name: customers
+    # password from customer-db's secret
+    passwordSecretRef:
+      name: customer-db-postgresql
+      namespace: platform
+      key: password
+  bundle:
+    pvcName: prompt-bundle
+    pvcNamespace: platform
+    mountPath: /var/lib/prompts
+  oidc:
+    issuer: http://dex.platform.svc.cluster.local:5556/dex
+    audience: demo-ui
+  networkPolicy:
+    allowedNamespaces:
+      - gateway
+  serviceMonitor:
+    enabled: true
+    namespace: mcp
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { cpu: "1",    memory: "512Mi" }
