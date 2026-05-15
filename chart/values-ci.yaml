@@ -1,5 +1,13 @@
 # values-ci.yaml — overlay for CI bring-up.
-# Disables demo-ui + traffic-gen + local-llm (uses LiteLLM mock mode instead).
+#
+# IMPORTANT: this file is an OVERLAY on top of values-demo.yaml. It does not
+# enumerate every subchart; subcharts not mentioned here inherit their state
+# from values-demo.yaml (which enables everything). Always apply with:
+#
+#   helm install ... -f chart/values-demo.yaml -f chart/values-ci.yaml
+#
+# CI-specific tweaks: disables demo-ui + traffic-gen + local-llm (uses LiteLLM
+# mock mode instead), shortens Prometheus retention.
 
 demo-ui:     { enabled: false }
 traffic-gen: { enabled: false }
