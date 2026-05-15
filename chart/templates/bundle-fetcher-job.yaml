@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prompt-bundle
+  namespace: platform
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 200Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bundle-fetcher
+  namespace: platform
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      annotations:
+        linkerd.io/inject: disabled
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: pull-and-verify
+          image: ghcr.io/sigstore/cosign/cosign:v2.4.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              cd /work
+              BUNDLE_REF="ghcr.io/lee-mcfaul2/lib-agent-prompt:v1.0.0"
+              echo "Pulling bundle: $BUNDLE_REF"
+              cosign verify \
+                --certificate-identity-regexp 'https://github.com/lee-mcfaul2/.*' \
+                --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+                "$BUNDLE_REF"
+              # cosign download artifact extracts to ./bundle.tgz
+              cosign download attestation "$BUNDLE_REF" > /work/attestation.json || true
+              # Use oras (built into cosign image) to pull the actual layer
+              oras pull "$BUNDLE_REF" -o /work/
+              tar -xzf /work/bundle.tgz -C /work/bundle/
+              echo "Bundle extracted."
+              ls -la /work/bundle/
+          volumeMounts:
+            - { name: workspace, mountPath: /work }
+            - { name: bundle,    mountPath: /work/bundle }
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: bundle
+          persistentVolumeClaim:
+            claimName: prompt-bundle

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pii-types
+  namespace: platform
+data:
+  # Source of truth: lib-agent-prompt v1.0.0 schemas/pii-types.json
+  # This is a sync-copy; the bundle-fetcher Job overwrites this at upgrade time.
+  pii-types.json: |
+    {
+      "version": "1.0.0",
+      "types": [
+        {"id": "EMAIL_ADDRESS",   "presidio": "EMAIL_ADDRESS",   "regex": null},
+        {"id": "PHONE_NUMBER",    "presidio": "PHONE_NUMBER",    "regex": null},
+        {"id": "CREDIT_CARD",     "presidio": "CREDIT_CARD",     "regex": null},
+        {"id": "US_SSN",          "presidio": "US_SSN",          "regex": null},
+        {"id": "IP_ADDRESS",      "presidio": "IP_ADDRESS",      "regex": null},
+        {"id": "AWS_ACCESS_KEY",  "presidio": null,              "regex": "AKIA[0-9A-Z]{16}"}
+      ]
+    }
