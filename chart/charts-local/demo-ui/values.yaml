@@ -1,0 +1,9 @@
+namespace: platform
+image:
+  repository: nginx
+  tag: "1.27-alpine"
+service:
+  port: 80
+  nodePort: 30080  # matches KIND extraPortMapping → host:8080
+gatewayUrl: "http://localhost:8080"  # rewritten at runtime via window.location
+dexUrl: "http://localhost:5556"

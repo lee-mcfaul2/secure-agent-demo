@@ -4,7 +4,6 @@
 # Toggles for each subchart (matches the conditions in Chart.yaml)
 linkerd-control-plane: { enabled: true }
 spire:                  { enabled: true }
-demo-ui:                { enabled: true }
 traffic-gen:            { enabled: true }
 
 # Subchart namespaces — used by Helm at install time when --create-namespace
@@ -255,4 +254,8 @@ local-llm:
   enabled: true
   namespace: platform
   model: "llama3.2:3b"
+
+demo-ui:
+  enabled: true
+  namespace: platform
 

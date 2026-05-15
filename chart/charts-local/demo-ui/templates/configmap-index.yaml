@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo-ui-static
+  namespace: {{ .Values.namespace }}
+data:
+  index.html: |
+    <!doctype html>
+    <html><head><meta charset="utf-8"><title>AI Security Demo</title>
+    <style>
+      body{font-family:system-ui,sans-serif;max-width:800px;margin:2em auto;padding:1em}
+      .msg{margin:0.5em 0;padding:0.5em;border-radius:6px}
+      .user{background:#dde}
+      .agent{background:#efe}
+      .error{background:#fee;color:#900}
+      input,select,button,textarea{font-size:1em;padding:0.4em;margin:0.2em}
+      textarea{width:100%;height:4em}
+      #out{margin-top:1em;border:1px solid #ccc;padding:0.5em;min-height:200px}
+    </style></head>
+    <body>
+      <h1>AI Security Demo</h1>
+      <p>Three demo users with different permissions:
+         <ul>
+           <li><b>alice</b> — full access</li>
+           <li><b>bob</b> — no transactions, no Atlantis customers</li>
+           <li><b>carol</b> — knowledge base only</li>
+         </ul>
+      </p>
+      <label>User: <select id="user">
+        <option>alice</option><option>bob</option><option>carol</option>
+      </select></label>
+      <textarea id="prompt" placeholder="Ask anything..."></textarea>
+      <button onclick="send()">Send</button>
+      <div id="out"></div>
+
+      <script>
+      async function mintToken(user){
+        const r = await fetch("http://localhost:5556/dex/token",{
+          method:"POST",
+          headers:{"content-type":"application/x-www-form-urlencoded"},
+          body:new URLSearchParams({
+            grant_type:"password", client_id:"demo-ui", client_secret:"demo-secret",
+            username:user+"@example.com", password:"password",
+            scope:"openid email groups profile"
+          })
+        });
+        return (await r.json()).id_token;
+      }
+      function add(cls,t){
+        const d=document.createElement("div"); d.className="msg "+cls;
+        d.textContent=t; document.getElementById("out").appendChild(d);
+      }
+      async function send(){
+        const user=document.getElementById("user").value;
+        const text=document.getElementById("prompt").value;
+        add("user", user+": "+text);
+        try{
+          const tok = await mintToken(user);
+          const r = await fetch("http://localhost:8080/v1/chat/completions",{
+            method:"POST",
+            headers:{"content-type":"application/json","authorization":"Bearer "+tok},
+            body: JSON.stringify({ model:"claude-sonnet-4-6", messages:[{role:"user",content:text}] })
+          });
+          const body = await r.json();
+          if(!r.ok){ add("error","["+r.status+"] "+JSON.stringify(body)); return; }
+          const msg = body.choices?.[0]?.message?.content || JSON.stringify(body);
+          add("agent", msg);
+        }catch(e){ add("error", String(e)); }
+        document.getElementById("prompt").value="";
+      }
+      </script>
+    </body></html>
