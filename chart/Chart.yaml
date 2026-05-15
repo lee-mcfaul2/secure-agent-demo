@@ -8,13 +8,22 @@ kubeVersion: ">=1.28.0"
 maintainers:
   - name: lee-mcfaul2
 dependencies:
-  # linkerd-crds MUST precede linkerd-control-plane: the control plane emits
-  # custom resources (servers.policy.linkerd.io, etc.) whose CRDs this chart
-  # registers. Helm's kind-sort installs CRDs ahead of CRs within one release.
+  # CRD-only charts. Vendored here so `helm dependency update` fetches them,
+  # but DISABLED in values (linkerd-crds.enabled / spire-crds.enabled = false):
+  # the umbrella ships both CRDs and the custom resources that consume them,
+  # and Helm validates the whole release against the API server before
+  # applying — CRDs defined in the same release aren't visible during that
+  # step. The Makefile installs these two out-of-band (helm template | kubectl
+  # apply) BEFORE the umbrella so discovery has the CRDs. Keeping them disabled
+  # in the umbrella avoids a Helm ownership conflict on the pre-applied CRDs.
   - name: linkerd-crds
     version: "1.6.1"
     repository: https://helm.linkerd.io/stable
     condition: linkerd-crds.enabled
+  - name: spire-crds
+    version: "0.4.0"
+    repository: https://spiffe.github.io/helm-charts-hardened/
+    condition: spire-crds.enabled
   - name: linkerd-control-plane
     version: "1.16.11"
     repository: https://helm.linkerd.io/stable

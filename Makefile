@@ -140,6 +140,17 @@ demo: bootstrap kind-up sync-dashboards sync-traffic-gen ## bring up the full de
 	fi
 	@echo "==> helm dependency update"
 	@cd chart && helm dependency update
+	@echo "==> installing CRDs out-of-band (Linkerd + SPIRE) before the umbrella"
+	@# The umbrella contains both CRDs and the custom resources that use them.
+	@# Helm validates the whole release against the API server before applying,
+	@# so CRDs defined in the same release aren't visible yet. Render the two
+	@# CRD-only subcharts and apply them first (idempotent, re-run safe; the
+	@# umbrella has linkerd-crds/spire-crds disabled so there's no ownership
+	@# conflict).
+	@helm template crds chart/charts/linkerd-crds-*.tgz | kubectl apply --server-side -f -
+	@helm template crds chart/charts/spire-crds-*.tgz   | kubectl apply --server-side -f -
+	@echo "==> waiting for CRDs to be Established..."
+	@kubectl wait --for=condition=Established crd --all --timeout=120s
 	@echo "==> helm install"
 	@helm upgrade --install $(HELM_RELEASE) ./chart \
 	  --namespace $(NAMESPACE) --create-namespace \
