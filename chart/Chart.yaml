@@ -9,7 +9,7 @@ maintainers:
   - name: lee-mcfaul2
 dependencies:
   - name: linkerd-control-plane
-    version: "2025.5.x"
+    version: "1.16.11"
     repository: https://helm.linkerd.io/stable
     condition: linkerd-control-plane.enabled
   - name: spire
