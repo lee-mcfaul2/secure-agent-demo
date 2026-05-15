@@ -12,6 +12,14 @@ SECRETS_FILE ?= chart/values-secrets.yaml
 LOCALBIN := $(CURDIR)/.bin
 export PATH := $(LOCALBIN):$(PATH)
 
+# Dedicated, isolated kubeconfig. The demo NEVER reads or writes ~/.kube/config
+# and never changes your current kubectl context. Every kubectl/helm/script in
+# this Makefile inherits this exported KUBECONFIG, and it only ever contains the
+# throwaway kind cluster — so the demo provably cannot touch any other cluster
+# on this machine, even on a re-run where the kind cluster already exists.
+KUBECONFIG := $(CURDIR)/.kube/demo.config
+export KUBECONFIG
+
 # Pinned tool versions (reproducible; KIND v0.24 node image is k8s 1.31).
 KIND_VERSION    ?= v0.24.0
 KUBECTL_VERSION ?= v1.31.4
@@ -82,16 +90,22 @@ bootstrap: preflight ## auto-install kind/kubectl/helm/jq into ./.bin if missing
 
 #### KIND ####
 
-kind-up: ## create the KIND cluster if missing
+kind-up: ## create the KIND cluster if missing (isolated kubeconfig)
+	@mkdir -p $(dir $(KUBECONFIG))
 	@if docker info >/dev/null 2>&1; then PROV=""; \
 	 elif podman info >/dev/null 2>&1; then PROV="KIND_EXPERIMENTAL_PROVIDER=podman"; \
 	 else echo "ERROR: no container runtime (run 'make preflight' for guidance)"; exit 1; fi; \
-	 env $$PROV kind get clusters 2>/dev/null | grep -q "^$(KIND_CLUSTER)$$" || \
-	   env $$PROV kind create cluster --config kind/demo-cluster.yaml
+	 if env $$PROV kind get clusters 2>/dev/null | grep -q "^$(KIND_CLUSTER)$$"; then \
+	   echo "==> kind cluster '$(KIND_CLUSTER)' exists; exporting its kubeconfig to $(KUBECONFIG)"; \
+	   env $$PROV kind export kubeconfig --name $(KIND_CLUSTER) --kubeconfig "$(KUBECONFIG)"; \
+	 else \
+	   env $$PROV kind create cluster --config kind/demo-cluster.yaml --kubeconfig "$(KUBECONFIG)"; \
+	 fi
 	@kubectl apply -f kind/metrics-server.yaml
 
-kind-down: ## delete the KIND cluster
+kind-down: ## delete the KIND cluster + its isolated kubeconfig
 	@kind delete cluster --name $(KIND_CLUSTER) || true
+	@rm -f "$(KUBECONFIG)"
 
 #### Sync (build-time prep) ####
 
@@ -175,4 +189,4 @@ dashboards-export: ## dump current Grafana dashboards back to dashboards/*.json
 
 clean: demo-down ## tear everything down
 	@rm -rf chart/dashboards chart/charts/*.tgz chart/Chart.lock \
-	  chart/charts-local/traffic-gen/traffic_gen.py
+	  chart/charts-local/traffic-gen/traffic_gen.py .kube

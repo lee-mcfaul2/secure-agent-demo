@@ -78,3 +78,20 @@ curl -sS -H "Authorization: Bearer $JWT" http://localhost:8080/v1/debug/catalog 
 
 This returns the per-user `AVAILABLE_TOOLS` list (Bob's won't include
 `transaction.*` tools).
+
+## "Will this touch my existing Kubernetes cluster?"
+
+No. The demo is fully isolated from any other cluster on the machine:
+
+- It runs in its own KIND cluster (separate Docker containers, separate API
+  server — it cannot merge with or modify another cluster's workloads).
+- It uses a **dedicated kubeconfig** at `.kube/demo.config`. Every
+  `kubectl`/`helm` call in the Makefile inherits it via an exported
+  `KUBECONFIG`. Your `~/.kube/config` is never read or written, and your
+  current `kubectl` context is never changed — even on a re-run where the
+  KIND cluster already exists (the Makefile re-exports the KIND cluster's
+  config into the isolated file rather than trusting the ambient context).
+- `make demo-down` deletes the KIND cluster and removes `.kube/demo.config`.
+
+To inspect the demo cluster manually:
+`KUBECONFIG=.kube/demo.config kubectl get pods -A`
