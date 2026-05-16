@@ -103,7 +103,28 @@ kind: Namespace
 metadata: { name: sandbox, labels: { linkerd.io/inject: enabled } }
 EOF
 
-echo "==> 5. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE}"
+echo "==> 5. Preflight: clear any stuck prior ${RELEASE} state (scoped; shared cluster safe)"
+status=$(helm -n "$NAMESPACE" status "$RELEASE" -o json 2>/dev/null | jq -r '.info.status // empty' 2>/dev/null || true)
+if [ -n "$status" ] && [ "$status" != "deployed" ]; then
+  echo "    release status=$status (not deployed) — uninstalling ${RELEASE} only"
+  helm uninstall "$RELEASE" -n "$NAMESPACE" --wait --timeout 120s 2>/dev/null || true
+fi
+# leftover Succeeded hook pod pins the hook PVC — delete by exact label+phase only
+kubectl -n "$NAMESPACE" delete pod -l job-name=bundle-fetcher \
+  --field-selector=status.phase=Succeeded --ignore-not-found 2>/dev/null || true
+# orphaned hook PVC (NOT chart-managed): delete this ONE named PVC; clear finalizer if it hangs
+if kubectl -n "$NAMESPACE" get pvc prompt-bundle >/dev/null 2>&1; then
+  kubectl -n "$NAMESPACE" delete pvc prompt-bundle --timeout=60s 2>/dev/null \
+    || kubectl -n "$NAMESPACE" patch pvc prompt-bundle --type=merge \
+         -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
+fi
+# stale release records, scoped to THIS release's helm secrets only
+if [ -n "$status" ] && [ "$status" != "deployed" ]; then
+  kubectl -n "$NAMESPACE" delete secret -l owner=helm,name="$RELEASE" \
+    --ignore-not-found 2>/dev/null || true
+fi
+
+echo "==> 6. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE}"
 helm upgrade --install "$RELEASE" ./chart \
   --namespace "$NAMESPACE" \
   -f "$VALUES" --wait
