@@ -35,6 +35,15 @@ spec:
             - { name: GATEWAY_AGENT_JOB_NAMESPACE, value: "{{ .Values.sandboxNamespace }}" }
             - { name: GATEWAY_AGENT_JOB_IMAGE, value: "{{ .Values.agentJob.image }}" }
             - { name: GATEWAY_AGENT_JOB_TIMEOUT_SECONDS, value: "{{ .Values.agentJob.timeoutSeconds }}" }
+            # LLM Guard — fail-closed: binary refuses to boot if enabled and no base_url.
+            - { name: GATEWAY_LLM_GUARD_ENABLED, value: "{{ .Values.llm_guard.enabled }}" }
+            - { name: GATEWAY_LLM_GUARD_BASE_URL, value: "{{ .Values.llm_guard.base_url }}" }
+            - { name: GATEWAY_LLM_GUARD_TIMEOUT_SECONDS, value: "{{ .Values.llm_guard.timeout_seconds }}" }
+            # LLM routing.
+            - { name: GATEWAY_DEFAULT_MODEL, value: "{{ .Values.models.default_model }}" }
+            - { name: GATEWAY_ALLOWED_MODELS, value: "{{ .Values.models.allowed_models }}" }
+            # Gateway's own MCP-proxy URL.
+            - { name: GATEWAY_GATEWAY_MCP_INTERNAL_URL, value: "{{ .Values.gateway_mcp_internal_url }}" }
             {{- if not .Values.bundle.demoMode }}
             - name: GATEWAY_PROMPT_BUNDLE_COSIGN_KEY
               valueFrom:
