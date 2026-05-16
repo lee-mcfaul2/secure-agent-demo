@@ -7,12 +7,12 @@ set -euo pipefail
 # platform components from ghcr.io OCI, and 3 local file:// charts. The .tgz
 # archives are deliberately gitignored (chart/charts/*.tgz), so a fresh clone
 # has nothing under chart/charts/. This script registers the HTTP repos that
-# `helm dependency build` needs, sanity-checks that the OCI platform artifacts
+# dependency resolution needs, sanity-checks that the OCI platform artifacts
 # were actually published, fetches every dependency, and installs.
 #
 # Usage:
-#   ./scripts/bootstrap.sh                 # add repos, build deps, install
-#   SKIP_INSTALL=1 ./scripts/bootstrap.sh  # only add repos + build deps
+#   ./scripts/bootstrap.sh                 # add repos, fetch deps, install
+#   SKIP_INSTALL=1 ./scripts/bootstrap.sh  # only add repos + fetch deps
 #
 # Override the release/namespace via env: RELEASE, NAMESPACE, VALUES.
 
@@ -24,8 +24,8 @@ NAMESPACE="${NAMESPACE:-platform}"
 VALUES="${VALUES:-chart/values-demo.yaml}"
 OCI_REPO="oci://ghcr.io/lee-mcfaul2/charts"
 
-# HTTP Helm repos the umbrella's Chart.lock resolves against. `helm dependency
-# build` errors with "no repository definition for ..." unless these are
+# HTTP Helm repos the umbrella resolves against. `helm dependency update`
+# errors with "no repository definition for ..." unless these are
 # registered first — this is the step the README was missing.
 declare -A REPOS=(
   [linkerd]="https://helm.linkerd.io/stable"
@@ -67,8 +67,11 @@ EOF
 fi
 echo "    OK (oci://ghcr.io/lee-mcfaul2/charts reachable)"
 
-echo "==> 3. helm dependency build (fetches all 13 subcharts into chart/charts/)"
-helm dependency build ./chart
+echo "==> 3. helm dependency update (resolves + fetches all 13 subcharts)"
+# `update` not `build`: one dependency (agent-sql-mcp) is a local file://
+# override, so Chart.lock is regenerated here rather than committed. This
+# also recreates chart/charts/ from scratch on every run.
+helm dependency update ./chart
 
 if [[ "${SKIP_INSTALL:-0}" == "1" ]]; then
   echo "==> SKIP_INSTALL=1 set — dependencies fetched, not installing."

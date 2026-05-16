@@ -24,8 +24,8 @@ jobs:
           helm repo add bitnami              https://charts.bitnami.com/bitnami
           helm repo update
 
-      - name: helm dependency build
-        run: cd chart && helm dependency build
+      - name: helm dependency update
+        run: cd chart && helm dependency update
 
       - name: helm lint
         run: helm lint chart/ -f chart/values-demo.yaml

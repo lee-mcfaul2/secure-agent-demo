@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: agent-sql-mcp-audit-prune
+  namespace: {{ .Values.namespace }}
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: prune
+              image: postgres:16-alpine
+              command: ["psql"]
+              args:
+                - "$(SQLMCP_DATABASE_URL)"
+                - "-c"
+                - "DELETE FROM mcp_audit WHERE ts < now() - interval '{{ .Values.audit.retentionDays }} days'"
+              env:
+                - name: SQLMCP_DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.database.secretName }}
+                      key:  {{ .Values.database.secretKey }}

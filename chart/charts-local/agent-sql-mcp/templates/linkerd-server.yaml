@@ -1,0 +1,10 @@
+apiVersion: policy.linkerd.io/v1beta1
+kind: Server
+metadata:
+  name: agent-sql-mcp
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels: { app: agent-sql-mcp }
+  port: 8443
+  proxyProtocol: HTTP/1

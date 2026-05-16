@@ -52,9 +52,13 @@ dependencies:
     version: "0.1.0"
     repository: oci://ghcr.io/lee-mcfaul2/charts
     condition: agent-sandbox.enabled
+  # Local patched override: the published agent-sql-mcp 0.1.0 ships a
+  # pre-install migration hook that needs a DB + secret Helm only creates as
+  # normal manifests, and is missing the DSN secret + migrations ConfigMap
+  # entirely. The fixed copy lives in charts-local/ until it is re-released.
   - name: agent-sql-mcp
     version: "0.1.0"
-    repository: oci://ghcr.io/lee-mcfaul2/charts
+    repository: "file://./charts-local/agent-sql-mcp"
     condition: agent-sql-mcp.enabled
   - name: local-llm
     version: "0.1.0"

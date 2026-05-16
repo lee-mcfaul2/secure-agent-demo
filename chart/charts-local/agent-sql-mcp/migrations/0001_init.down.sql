@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS mcp_audit;
+DROP TABLE IF EXISTS order_items;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS customers;

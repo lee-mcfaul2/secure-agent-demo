@@ -1,0 +1,13 @@
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: agent-sql-mcp
+  namespace: {{ .Values.namespace }}
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: agent-sql-mcp
+  requiredAuthenticationRefs:
+    - kind: MeshTLSAuthentication
+      name: agent-gateway-only

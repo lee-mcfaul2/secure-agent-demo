@@ -1,0 +1,11 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: agent-sql-mcp
+spec:
+  spiffeIDTemplate: "spiffe://ai-security.io/ns/{{ .Values.namespace }}/sa/agent-sql-mcp-sa"
+  podSelector:
+    matchLabels: { app: agent-sql-mcp }
+  workloadSelectorTemplates:
+    - "k8s:ns:{{ .Values.namespace }}"
+    - "k8s:sa:agent-sql-mcp-sa"

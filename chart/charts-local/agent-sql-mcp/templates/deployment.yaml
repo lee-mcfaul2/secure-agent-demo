@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-sql-mcp
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: { app: agent-sql-mcp }
+  template:
+    metadata:
+      labels: { app: agent-sql-mcp }
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      serviceAccountName: agent-sql-mcp-sa
+      containers:
+        - name: mcp
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8443
+          env:
+            - { name: SQLMCP_LISTEN_ADDR,           value: ":8443" }
+            - { name: SQLMCP_OIDC_ISSUER,           value: "{{ .Values.oidc.issuer }}" }
+            - { name: SQLMCP_OIDC_AUDIENCE,         value: "{{ .Values.oidc.audience }}" }
+            - { name: SQLMCP_GATEWAY_SPIFFE,        value: "{{ .Values.gatewaySPIFFE }}" }
+            - { name: SQLMCP_DB_POOL_MAX,           value: "{{ .Values.database.poolMax }}" }
+            - { name: SQLMCP_QUERY_TIMEOUT_SECONDS, value: "{{ .Values.database.queryTimeoutSeconds }}" }
+            - { name: SQLMCP_SCHEMA_VERSION,        value: "{{ .Values.schemaVersion }}" }
+            - name: SQLMCP_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.secretName }}
+                  key:  {{ .Values.database.secretKey }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8443 }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8443 }
+            periodSeconds: 5
