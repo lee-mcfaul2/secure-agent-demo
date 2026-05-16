@@ -1,6 +1,6 @@
 .PHONY: help demo demo-down kind-up kind-down smoke traffic traffic-burst \
         sync-dashboards sync-traffic-gen dashboards-export logs ui-open grafana-open \
-        agentdojo e2e clean test preflight bootstrap
+        agentdojo e2e clean test preflight bootstrap diagnose
 
 KIND_CLUSTER ?= ai-security
 HELM_RELEASE ?= ai-security
@@ -151,13 +151,24 @@ demo: bootstrap kind-up sync-dashboards sync-traffic-gen ## bring up the full de
 	@helm template crds chart/charts/spire-crds-*.tgz   | kubectl apply --server-side -f -
 	@echo "==> waiting for CRDs to be Established..."
 	@kubectl wait --for=condition=Established crd --all --timeout=120s
-	@echo "==> helm install"
+	@echo "==> checking for a prior non-deployed release (clean install beats a stuck upgrade)"
+	@st=$$(helm status $(HELM_RELEASE) -n $(NAMESPACE) 2>/dev/null | sed -n 's/^STATUS: //p' | head -1); \
+	 echo "  current release status: $${st:-<none>}"; \
+	 if [ -n "$$st" ] && [ "$$st" != "deployed" ]; then \
+	   echo "  uninstalling '$$st' release so we do a clean install (pre-install, not pre-upgrade)"; \
+	   helm uninstall $(HELM_RELEASE) -n $(NAMESPACE) --wait --timeout 3m || true; \
+	 fi
+	@echo "==> helm install (verbose: --debug shows hook-by-hook progress)"
 	@helm upgrade --install $(HELM_RELEASE) ./chart \
 	  --namespace $(NAMESPACE) --create-namespace \
 	  -f chart/values-demo.yaml \
 	  $(if $(wildcard $(SECRETS_FILE)),-f $(SECRETS_FILE),) \
 	  --timeout 10m \
-	  --wait
+	  --wait --debug \
+	  || { echo ""; echo "############ helm install FAILED — auto-diagnostics ############"; \
+	       $(MAKE) --no-print-directory diagnose; \
+	       echo "################################################################"; \
+	       exit 1; }
 	@echo "==> waiting for pods..."
 	@scripts/wait-for-ready.sh
 	@echo "==> port-forward"
@@ -175,6 +186,21 @@ grafana-open: ## open Grafana
 
 logs: ## tail logs from a chosen component
 	@kubectl logs -n gateway -l app.kubernetes.io/name=agent-gateway --tail=50 -f
+
+diagnose: ## dump cluster state to explain a failed/stuck bring-up
+	@echo "### helm releases (all namespaces)"; helm list -A 2>/dev/null || true
+	@echo; echo "### helm status $(HELM_RELEASE)"; helm status $(HELM_RELEASE) -n $(NAMESPACE) 2>/dev/null | sed -n '1,20p' || true
+	@echo; echo "### pods NOT Running/Completed (the actual problem is almost always here)"; \
+	  kubectl get pods -A 2>/dev/null | awk 'NR==1 || ($$4!="Running" && $$4!="Completed")' || true
+	@echo; echo "### all pods (wide)"; kubectl get pods -A -o wide 2>/dev/null || true
+	@echo; echo "### hook jobs in $(NAMESPACE)"; kubectl get jobs -n $(NAMESPACE) 2>/dev/null || true
+	@echo; echo "### bundle-fetcher job describe (tail)"; kubectl describe job/bundle-fetcher -n $(NAMESPACE) 2>/dev/null | tail -25 || true
+	@echo; echo "### bundle-fetcher pod logs"; kubectl logs -n $(NAMESPACE) -l job-name=bundle-fetcher --tail=50 --all-containers 2>/dev/null || true
+	@echo; echo "### recent events in $(NAMESPACE) (look for FailedScheduling / Insufficient / ImagePull / FailedMount)"; \
+	  kubectl get events -n $(NAMESPACE) --sort-by=.lastTimestamp 2>/dev/null | tail -30 || true
+	@echo; echo "### recent events (all namespaces)"; kubectl get events -A --sort-by=.lastTimestamp 2>/dev/null | tail -30 || true
+	@echo; echo "### node capacity / pressure (RAM is the usual culprit on small boxes)"; \
+	  kubectl describe nodes 2>/dev/null | grep -A6 -iE 'Allocated resources|Conditions:' | head -40 || true
 
 #### Traffic ####
 
