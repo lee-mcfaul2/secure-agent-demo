@@ -75,9 +75,34 @@ if [[ "${SKIP_INSTALL:-0}" == "1" ]]; then
   exit 0
 fi
 
-echo "==> 4. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE}"
+echo "==> 4. Creating namespaces"
+# The umbrella spans four namespaces and several subcharts ship pre-install
+# hooks (e.g. agent-sql-mcp's DB migration Job in namespace mcp). Helm runs
+# pre-install hooks BEFORE normal manifests, so a chart-templated Namespace
+# can't exist in time — the hook fails with `namespaces "mcp" not found`.
+# Namespaces must therefore be created out-of-band, before Helm runs. This is
+# idempotent (kubectl apply) and replaces the old chart/templates/namespaces.yaml.
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Namespace
+metadata: { name: platform, labels: { linkerd.io/inject: enabled } }
+---
+apiVersion: v1
+kind: Namespace
+metadata: { name: gateway, labels: { linkerd.io/inject: enabled } }
+---
+apiVersion: v1
+kind: Namespace
+metadata: { name: mcp, labels: { linkerd.io/inject: enabled } }
+---
+apiVersion: v1
+kind: Namespace
+metadata: { name: sandbox, labels: { linkerd.io/inject: enabled } }
+EOF
+
+echo "==> 5. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE}"
 helm upgrade --install "$RELEASE" ./chart \
-  --namespace "$NAMESPACE" --create-namespace \
+  --namespace "$NAMESPACE" \
   -f "$VALUES" --wait
 
 echo

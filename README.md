@@ -38,8 +38,17 @@ helm repo add bitnami             https://charts.bitnami.com/bitnami
 helm repo update
 
 helm dependency build ./chart
+
+# The chart spans four namespaces and subcharts ship pre-install hooks that
+# run before any chart-templated Namespace would exist. Create them first:
+for ns in platform gateway mcp sandbox; do
+  kubectl create namespace "$ns" --dry-run=client -o yaml \
+    | kubectl label --local -f - linkerd.io/inject=enabled -o yaml \
+    | kubectl apply -f -
+done
+
 helm upgrade --install ai-security ./chart \
-  --namespace platform --create-namespace \
+  --namespace platform \
   -f chart/values-demo.yaml --wait
 ```
 
@@ -64,6 +73,7 @@ command as `helm upgrade --install`. To remove:
 
 ```bash
 helm uninstall ai-security -n platform
+kubectl delete namespace platform gateway mcp sandbox  # not chart-managed
 kubectl delete -f chart/crds/   # optional: also drop the CRDs
 ```
 
