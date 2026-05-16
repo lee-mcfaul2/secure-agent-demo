@@ -1,0 +1,42 @@
+dependencies:
+- name: linkerd-control-plane
+  repository: https://helm.linkerd.io/stable
+  version: 1.16.11
+- name: spire
+  repository: https://spiffe.github.io/helm-charts-hardened/
+  version: 0.21.1
+- name: kube-prometheus-stack
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 65.8.1
+- name: dex
+  repository: https://charts.dexidp.io
+  version: 0.19.1
+- name: postgresql
+  repository: https://charts.bitnami.com/bitnami
+  version: 16.7.27
+- name: pii-tokenizer
+  repository: oci://ghcr.io/lee-mcfaul2/charts
+  version: 0.1.0
+- name: llm-guard
+  repository: oci://ghcr.io/lee-mcfaul2/charts
+  version: 0.1.0
+- name: agent-gateway
+  repository: oci://ghcr.io/lee-mcfaul2/charts
+  version: 0.1.0
+- name: agent-sandbox
+  repository: oci://ghcr.io/lee-mcfaul2/charts
+  version: 0.1.0
+- name: agent-sql-mcp
+  repository: oci://ghcr.io/lee-mcfaul2/charts
+  version: 0.1.0
+- name: local-llm
+  repository: file://./charts-local/local-llm
+  version: 0.1.0
+- name: demo-ui
+  repository: file://./charts-local/demo-ui
+  version: 0.1.0
+- name: traffic-gen
+  repository: file://./charts-local/traffic-gen
+  version: 0.1.0
+digest: sha256:0b9f3cf42104b7a45ff04ef325ccc48174fe59fb9271c1faa338e9963a3dc157
+generated: "2026-05-15T23:34:59.282786141-04:00"

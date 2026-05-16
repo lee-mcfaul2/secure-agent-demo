@@ -1,12 +1,9 @@
 # values-demo.yaml — defaults for the local walkthrough demo.
 # All platform components enabled. Local Ollama LLM. Traffic generator runs.
 
-# Toggles for each subchart (matches the conditions in Chart.yaml)
-# linkerd-crds + spire-crds are installed OUT-OF-BAND by `make demo` before the
-# umbrella (see Makefile + Chart.yaml comment). Disabled here so the umbrella
-# does not try to re-create the pre-applied CRDs (ownership conflict).
-linkerd-crds: { enabled: false }
-spire-crds:   { enabled: false }
+# Toggles for each subchart (matches the conditions in Chart.yaml).
+# Linkerd + SPIRE CRDs are shipped in chart/crds/ (Helm installs them before
+# templates) — they are not subcharts, so there are no crds toggles here.
 # ============================================================================
 # ☢️  DEMO-ONLY LINKERD CA — committed private keys, on purpose. ☢️
 # The trust anchor + issuer below come from chart/demo-ca/ (see its README).

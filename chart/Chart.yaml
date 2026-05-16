@@ -8,22 +8,13 @@ kubeVersion: ">=1.28.0"
 maintainers:
   - name: lee-mcfaul2
 dependencies:
-  # CRD-only charts. Vendored here so `helm dependency update` fetches them,
-  # but DISABLED in values (linkerd-crds.enabled / spire-crds.enabled = false):
-  # the umbrella ships both CRDs and the custom resources that consume them,
-  # and Helm validates the whole release against the API server before
-  # applying — CRDs defined in the same release aren't visible during that
-  # step. The Makefile installs these two out-of-band (helm template | kubectl
-  # apply) BEFORE the umbrella so discovery has the CRDs. Keeping them disabled
-  # in the umbrella avoids a Helm ownership conflict on the pre-applied CRDs.
-  - name: linkerd-crds
-    version: "1.6.1"
-    repository: https://helm.linkerd.io/stable
-    condition: linkerd-crds.enabled
-  - name: spire-crds
-    version: "0.4.0"
-    repository: https://spiffe.github.io/helm-charts-hardened/
-    condition: spire-crds.enabled
+  # NOTE: the Linkerd + SPIRE CRDs are NOT subchart deps — they are shipped as
+  # static manifests in this chart's crds/ directory (extracted from
+  # linkerd-crds 1.6.1 and spire-crds 0.4.0). Helm installs everything in
+  # crds/ BEFORE rendering/validating templates, so a single `helm install`
+  # works: the CRDs exist before the platform subcharts' custom resources
+  # (AuthorizationPolicy, Server, ClusterSPIFFEID, …) are validated. No
+  # out-of-band kubectl step, no Makefile required.
   - name: linkerd-control-plane
     version: "1.16.11"
     repository: https://helm.linkerd.io/stable
