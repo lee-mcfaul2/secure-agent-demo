@@ -23,11 +23,10 @@ helm install ai-security ./chart \
   -f chart/values-demo.yaml --wait
 ```
 
-Two standard Helm commands, no pre-steps. The Linkerd + SPIRE CRDs ship
-in `chart/crds/` (Helm installs them before templates), and the
-dashboards / traffic-gen script are committed in the chart, so a single
-`helm install` brings the whole platform up. Installs into your current
-`kubectl` context; nothing rewrites your kubeconfig.
+The Linkerd + SPIRE CRDs ship in `chart/crds/` (Helm installs them before
+templates), and the dashboards / traffic-gen script are committed in the
+chart, so a single `helm install` brings the whole platform up using your
+current `kubectl` context.
 
 Turnkey — no secret setup. The chart ships a baked-in throwaway
 `pii-tokenizer` master key, Linkerd CA, and prompt bundle (see

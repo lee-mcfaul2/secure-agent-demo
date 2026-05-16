@@ -5,14 +5,13 @@ Kubernetes cluster you already have.
 
 ## Prerequisites
 
-- A Kubernetes cluster (any conformant cluster: managed, on-prem, k3s, etc.)
-- `kubectl` pointed at it (`kubectl config use-context <ctx>`)
+- A Kubernetes cluster (any conformant cluster), with `kubectl` pointed at it
 - `helm` 3.8+
-- The cluster needs a default StorageClass (one small RWO PVC is used) and
-  enough room for the platform (~2 vCPU / ~4Gi of schedulable headroom; the
-  local LLM is the heaviest pod — disable it via values for a lean install).
+- A default StorageClass (one small RWO PVC is used)
+- ~2 vCPU / ~4Gi schedulable headroom (the local LLM is the heaviest pod;
+  disable it in values for a lean install)
 
-## Install (raw Helm — two commands)
+## Install
 
 ```bash
 helm dependency build ./chart
@@ -22,30 +21,19 @@ helm install ai-security ./chart \
   -f chart/values-demo.yaml --wait
 ```
 
-That's it. No Makefile, no pre-steps, no `kubectl apply` for CRDs:
+The Linkerd + SPIRE CRDs ship in `chart/crds/`, which Helm installs before
+templates, so the platform's `policy.linkerd.io` / `spire.spiffe.io` custom
+resources resolve in a single `helm install`. Dashboards and the traffic-gen
+script are committed in the chart, and `Chart.lock` is committed so
+`helm dependency build` is deterministic.
 
-- The Linkerd + SPIRE **CRDs ship in `chart/crds/`**, which Helm installs
-  before any templates — so the platform's `policy.linkerd.io` /
-  `spire.spiffe.io` custom resources resolve in a single `helm install`.
-- Dashboards and the traffic-gen script are committed in the chart, so
-  `.Files.Get` works with no staging step.
-- `Chart.lock` is committed, so `helm dependency build` is deterministic
-  (it pulls the exact pinned subchart versions; the umbrella's own
-  `chart/charts/*.tgz` are not vendored in git).
+The install uses your current `kubectl` context. To upgrade, re-run the
+command as `helm upgrade --install`. To remove:
 
-Installs into whatever cluster your current `kubectl` context points at;
-nothing here rewrites your kubeconfig.
-
-To upgrade, re-run the same `helm install` as `helm upgrade --install`.
-To remove: `helm uninstall ai-security -n platform` (the `chart/crds/`
-CRDs are intentionally left — `kubectl delete -f chart/crds/` to drop them).
-
-## Prerequisites for install
-
-- `helm` 3.8+ and a `kubectl` context pointed at the target cluster
-- A default StorageClass (one small RWO PVC is used)
-- ~2 vCPU / ~4Gi schedulable headroom (the local LLM is the heaviest pod;
-  disable it in values for a lean install)
+```bash
+helm uninstall ai-security -n platform
+kubectl delete -f chart/crds/   # optional: also drop the CRDs
+```
 
 ## Reach the components
 
