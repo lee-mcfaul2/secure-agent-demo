@@ -12,56 +12,68 @@ Kubernetes cluster you already have.
   enough room for the platform (~2 vCPU / ~4Gi of schedulable headroom; the
   local LLM is the heaviest pod — disable it via values for a lean install).
 
-## Install
+## Install (raw Helm — two commands)
 
 ```bash
-# Installs into whatever cluster your current kubectl context points at.
-make install
-```
+helm dependency build ./chart
 
-`make install` does the non-obvious ordering for you: pulls chart deps,
-applies the Linkerd + SPIRE CRDs out-of-band (they must exist before the
-release that uses them), then `helm upgrade --install`. It uses your
-**ambient** kubeconfig/context — nothing here hijacks or rewrites it.
-
-Prefer raw Helm? The equivalent is:
-
-```bash
-make sync-dashboards sync-traffic-gen        # stage chart file assets
-cd chart && helm dependency update && cd ..
-helm template crds chart/charts/linkerd-crds-*.tgz | kubectl apply --server-side -f -
-helm template crds chart/charts/spire-crds-*.tgz   | kubectl apply --server-side -f -
-kubectl wait --for=condition=Established crd --all --timeout=120s
-helm upgrade --install ai-security ./chart -n platform --create-namespace \
+helm install ai-security ./chart \
+  --namespace platform --create-namespace \
   -f chart/values-demo.yaml --wait
 ```
 
-## Use / tear down
+That's it. No Makefile, no pre-steps, no `kubectl apply` for CRDs:
+
+- The Linkerd + SPIRE **CRDs ship in `chart/crds/`**, which Helm installs
+  before any templates — so the platform's `policy.linkerd.io` /
+  `spire.spiffe.io` custom resources resolve in a single `helm install`.
+- Dashboards and the traffic-gen script are committed in the chart, so
+  `.Files.Get` works with no staging step.
+- `Chart.lock` is committed, so `helm dependency build` is deterministic
+  (it pulls the exact pinned subchart versions; the umbrella's own
+  `chart/charts/*.tgz` are not vendored in git).
+
+Installs into whatever cluster your current `kubectl` context points at;
+nothing here rewrites your kubeconfig.
+
+To upgrade, re-run the same `helm install` as `helm upgrade --install`.
+To remove: `helm uninstall ai-security -n platform` (the `chart/crds/`
+CRDs are intentionally left — `kubectl delete -f chart/crds/` to drop them).
+
+## Prerequisites for install
+
+- `helm` 3.8+ and a `kubectl` context pointed at the target cluster
+- A default StorageClass (one small RWO PVC is used)
+- ~2 vCPU / ~4Gi schedulable headroom (the local LLM is the heaviest pod;
+  disable it in values for a lean install)
+
+## Reach the components
 
 ```bash
-make port-forward    # gateway :8080, demo-ui :8081, grafana :3000, dex :5556
-make smoke           # verify happy path + blocked-attack
-make traffic-burst   # fire 50 prompts at the gateway
-make diagnose        # dump cluster state if something is wrong
-make uninstall       # remove the release
+kubectl -n platform port-forward svc/agent-gateway 8080:8080
+kubectl -n platform port-forward svc/demo-ui       8081:80
+kubectl -n platform port-forward svc/ai-security-grafana 3000:80
 ```
 
-The baked-in demo key/CA/bundle (`chart/demo-secrets`, `chart/demo-ca`,
-`chart/demo-bundle`) make this turnkey but are **demo-only anti-patterns** —
-each is loudly flagged in its own README. Override the master key with your
-own by creating `chart/values-secrets.yaml` (gitignored); `make install`
-layers it automatically.
+## Demo secrets are baked in (and loudly flagged)
 
-### Optional: throwaway local KIND cluster
+`chart/demo-secrets`, `chart/demo-ca`, and `chart/demo-bundle` ship a
+throwaway tokenizer key, Linkerd CA, and prompt bundle so the chart is
+turnkey. Each is a **deliberate demo-only anti-pattern** documented in its
+own README. Override the key for anything real:
 
-If you don't have a cluster and just want to kick the tires locally,
-`make demo` will create a single-node KIND cluster (needs Docker/Podman) in
-an isolated kubeconfig and install into that. KIND is finicky about host
-limits (inotify, cgroups) — see `docs/troubleshooting.md`. The supported path
-is `make install` into a real cluster.
+```bash
+echo "pii-tokenizer: {k_master: \"$(openssl rand -base64 32)\"}" > chart/values-secrets.yaml
+helm install ... -f chart/values-demo.yaml -f chart/values-secrets.yaml ...
+```
 
-See `docs/walkthrough.md` for the demo script and `docs/troubleshooting.md`
-for common issues.
+## Optional convenience: a Makefile and local KIND
+
+The repo also has a `Makefile` (`make install`, `make diagnose`,
+`make smoke`, etc.) and a `make demo` that spins up a throwaway local
+KIND cluster — purely optional wrappers around the Helm commands above.
+KIND is finicky about host limits; raw Helm into a real cluster is the
+supported path. See `docs/walkthrough.md` and `docs/troubleshooting.md`.
 
 ## Platform repos
 

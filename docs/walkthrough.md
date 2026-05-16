@@ -16,32 +16,40 @@ git clone https://github.com/lee-mcfaul2/ai-security
 cd ai-security/secure-agent-demo
 
 kubectl config use-context <your-cluster>   # pick the target cluster
-make install                                # installs into that cluster
+
+helm dependency build ./chart
+helm install ai-security ./chart \
+  --namespace platform --create-namespace \
+  -f chart/values-demo.yaml --wait
 ```
 
-`make install` pulls chart deps, applies the Linkerd + SPIRE CRDs
-out-of-band (they must exist before the release that consumes them), then
-`helm upgrade --install`. It uses your **current kubectl context** and does
-not touch `~/.kube/config` otherwise. (Raw `helm` equivalent is in the
-repo `README.md`.)
+Two standard Helm commands, no pre-steps. The Linkerd + SPIRE CRDs ship
+in `chart/crds/` (Helm installs them before templates), and the
+dashboards / traffic-gen script are committed in the chart, so a single
+`helm install` brings the whole platform up. Installs into your current
+`kubectl` context; nothing rewrites your kubeconfig.
 
-Turnkey — no secret setup. The chart ships with a baked-in throwaway
+Turnkey — no secret setup. The chart ships a baked-in throwaway
 `pii-tokenizer` master key, Linkerd CA, and prompt bundle (see
 `chart/demo-secrets/README.md`, `chart/demo-ca/README.md`,
 `chart/demo-bundle/README.md` — deliberate, loudly-flagged demo-only
-anti-patterns, never for reuse). Override the key by creating
-`chart/values-secrets.yaml` (gitignored) with `pii-tokenizer.k_master` =
-`openssl rand -base64 32`; `make install` layers it automatically.
+anti-patterns, never for reuse). Override the key with your own:
 
-No cluster handy? `make demo` spins up a throwaway single-node KIND
-cluster (needs Docker/Podman) and installs into it — see
-`docs/troubleshooting.md`. The supported path is `make install` into a
-real cluster.
+```bash
+echo "pii-tokenizer: {k_master: \"$(openssl rand -base64 32)\"}" > chart/values-secrets.yaml
+# add: -f chart/values-secrets.yaml  to the helm install above
+```
+
+No cluster handy? The optional `make demo` spins up a throwaway local
+KIND cluster — see `docs/troubleshooting.md`. Raw `helm install` into a
+real cluster is the supported path.
 
 When pods are ready, expose the components locally:
 
 ```bash
-make port-forward
+kubectl -n platform port-forward svc/agent-gateway 8080:8080 &
+kubectl -n platform port-forward svc/demo-ui       8081:80   &
+kubectl -n platform port-forward svc/ai-security-grafana 3000:80 &
 ```
 
 - UI: http://localhost:8081
@@ -126,14 +134,16 @@ agent-gateway:
     api_key: "sk-ant-..."
 ```
 
-Then: `make install` (idempotent — Helm upgrades the gateway in place).
+Then re-run the `helm install` as `helm upgrade --install` (idempotent —
+Helm upgrades the gateway in place).
 
 ## 8. Tear down
 
 ```bash
-make uninstall     # remove the platform release from your cluster
-# (optional) drop the out-of-band CRDs too — see `make uninstall` output
+helm uninstall ai-security -n platform        # remove the platform release
+kubectl delete -f chart/crds/                 # (optional) drop the CRDs too
+kubectl delete namespace platform gateway mcp sandbox --ignore-not-found
 
 # if you used the optional local KIND path instead:
-make demo-down     # delete the throwaway KIND cluster
+make demo-down                                # delete the throwaway KIND cluster
 ```
