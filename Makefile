@@ -71,14 +71,39 @@ preflight: ## verify a container runtime + curl/tar (real guidance, no fake comm
 	  ins=$$(cat /proc/sys/fs/inotify/max_user_instances 2>/dev/null || echo 0); \
 	  wat=$$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null || echo 0); \
 	  if [ "$$ins" -lt 512 ] || [ "$$wat" -lt 524288 ]; then \
-	    echo ""; \
-	    echo "WARNING: low inotify limits (instances=$$ins watches=$$wat)."; \
-	    echo "This is the #1 cause of KIND failing at 'Starting control-plane'"; \
-	    echo "with 'kubelet is not healthy'. Raise them (host-level, needs root):"; \
-	    echo "  sudo sysctl fs.inotify.max_user_instances=8192"; \
-	    echo "  sudo sysctl fs.inotify.max_user_watches=1048576"; \
-	    echo "Persist in /etc/sysctl.d/99-kind.conf. Continuing anyway..."; \
-	    echo ""; \
+	    if [ "$$(id -u)" = "0" ]; then \
+	      echo "==> raising low inotify limits (was instances=$$ins watches=$$wat; running as root)"; \
+	      sysctl -w fs.inotify.max_user_instances=8192 >/dev/null; \
+	      sysctl -w fs.inotify.max_user_watches=1048576 >/dev/null; \
+	      printf 'fs.inotify.max_user_instances=8192\nfs.inotify.max_user_watches=1048576\n' > /etc/sysctl.d/99-kind.conf 2>/dev/null || true; \
+	      echo "    set to instances=8192 watches=1048576 (persisted to /etc/sysctl.d/99-kind.conf)"; \
+	      echo "    NOTE: any KIND cluster created BEFORE this is already broken —"; \
+	      echo "          run 'make demo-down' once, then 'make demo' again."; \
+	    elif [ "$$INOTIFY_OK" = "1" ]; then \
+	      echo "WARNING: low inotify (instances=$$ins watches=$$wat) but INOTIFY_OK=1 set; proceeding."; \
+	    else \
+	      echo ""; \
+	      echo "ERROR: inotify limits are too low for a working Kubernetes node"; \
+	      echo "       (instances=$$ins, need >=512;  watches=$$wat, need >=524288)."; \
+	      echo ""; \
+	      echo "This GUARANTEES a broken cluster: the control plane starts but"; \
+	      echo "kube-proxy / coredns / local-path-provisioner crash-loop (they"; \
+	      echo "can't create inotify watches), so storage + DNS never come up."; \
+	      echo "It is NOT optional and NOT a warning to skip."; \
+	      echo ""; \
+	      echo "Fix (host-level, needs root) then re-run:"; \
+	      echo "  sudo sysctl fs.inotify.max_user_instances=8192"; \
+	      echo "  sudo sysctl fs.inotify.max_user_watches=1048576"; \
+	      echo "  sudo sh -c 'printf \"fs.inotify.max_user_instances=8192\\\\nfs.inotify.max_user_watches=1048576\\\\n\" > /etc/sysctl.d/99-kind.conf'"; \
+	      echo ""; \
+	      echo "Or just run the demo with sudo (it will set these for you):"; \
+	      echo "  sudo make demo"; \
+	      echo ""; \
+	      echo "If a cluster was already created under the low limit, it is"; \
+	      echo "poisoned — 'make demo-down' first, then retry."; \
+	      echo "(Override, not recommended: make demo INOTIFY_OK=1)"; \
+	      exit 1; \
+	    fi; \
 	  fi; \
 	fi
 
