@@ -1,13 +1,11 @@
 # Troubleshooting
 
 All commands assume your `kubectl` context points at the target cluster and
-the release is `ai-security` in namespace `platform`. `make diagnose` dumps
-most of the state below in one shot.
+the release is `ai-security` in namespace `platform`.
 
 ## Install fails / a pod won't come up
 
 ```bash
-make diagnose          # or, by hand:
 kubectl get pods -A | grep -vE 'Running|Completed'
 kubectl -n platform get events --sort-by=.lastTimestamp | tail -30
 helm status ai-security -n platform

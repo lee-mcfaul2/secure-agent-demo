@@ -67,12 +67,8 @@ echo "pii-tokenizer: {k_master: \"$(openssl rand -base64 32)\"}" > chart/values-
 helm install ... -f chart/values-demo.yaml -f chart/values-secrets.yaml ...
 ```
 
-## Optional convenience: a Makefile
-
-The repo includes a thin `Makefile` (`make install`, `make uninstall`,
-`make diagnose`, `make smoke`, `make port-forward`) that just wraps the
-Helm/kubectl commands above — entirely optional. See
-`docs/walkthrough.md` and `docs/troubleshooting.md`.
+See `docs/walkthrough.md` for a guided tour and `docs/troubleshooting.md`
+for common issues.
 
 ## Platform repos
 

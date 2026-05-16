@@ -5,7 +5,7 @@ A guided tour of the platform's security layers. Estimated time: 15 minutes.
 ## Prerequisites
 
 - A Kubernetes cluster with a default StorageClass, and `kubectl` pointed at it
-- `helm` 3.8+, `jq`, `curl`, `make`
+- `helm` 3.8+, `kubectl`, `jq`, `curl`
 - ~2 vCPU / ~4Gi of schedulable headroom (the local LLM pod is the heaviest;
   disable it in values for a lean install)
 
@@ -110,14 +110,17 @@ Open Grafana → Browse dashboards:
 - **Agent Loop** — finish_reason breakdown, iterations, token usage
 
 The `traffic-gen` pod runs continuously (1 prompt every 5-15s), so the
-dashboards always have data. Run `make traffic-burst` to fire 50 prompts in
-30 seconds for a recording-friendly spike.
+dashboards always have data. For a recording-friendly spike, fire 50
+prompts in 30s with `scripts/traffic-burst.sh 50` (needs the gateway
+port-forward from step 1).
 
 ## 6. Verify with smoke + AgentDojo
 
 ```bash
-make smoke         # happy path + blocked attack
-make agentdojo     # full benchmark gate (~5 min)
+scripts/smoke.sh                                       # happy path + blocked attack
+cd tests/agentdojo && python run_agentdojo.py --config config.yaml \
+  --out agentdojo-results.json && \
+  python score_gate.py agentdojo-results.json config.yaml   # ≥90% gate
 ```
 
 The CI gate enforces ≥90% attack-block-rate; nightly runs the full corpus
