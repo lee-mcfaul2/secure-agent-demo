@@ -3,12 +3,14 @@ set -euo pipefail
 
 # bootstrap.sh — turn a bare clone of this repo into a running demo.
 #
-# The umbrella chart pulls 13 subcharts: 5 from public HTTP Helm repos, 5
-# platform components from ghcr.io OCI, and 3 local file:// charts. The .tgz
-# archives are deliberately gitignored (chart/charts/*.tgz), so a fresh clone
-# has nothing under chart/charts/. This script registers the HTTP repos that
-# dependency resolution needs, sanity-checks that the OCI platform artifacts
-# were actually published, fetches every dependency, and installs.
+# The umbrella chart pulls 13 subcharts: 5 infra charts from public HTTP Helm
+# repos (linkerd, spiffe, prometheus-community, dex, bitnami) and 8 local
+# file://./charts-local/* charts (the 5 patched platform components plus
+# demo-ui, local-llm, and traffic-gen). No subcharts are pulled from any
+# remote container registry.
+# The .tgz archives are deliberately gitignored (chart/charts/*.tgz), so a
+# fresh clone has nothing under chart/charts/. This script registers the HTTP
+# repos that dependency resolution needs, fetches every dependency, and installs.
 #
 # Usage:
 #   ./scripts/bootstrap.sh                 # add repos, fetch deps, install
@@ -22,7 +24,6 @@ cd "$REPO_ROOT"
 RELEASE="${RELEASE:-ai-security}"
 NAMESPACE="${NAMESPACE:-platform}"
 VALUES="${VALUES:-chart/values-demo.yaml}"
-OCI_REPO="oci://ghcr.io/lee-mcfaul2/charts"
 
 # HTTP Helm repos the umbrella resolves against. `helm dependency update`
 # errors with "no repository definition for ..." unless these are
@@ -44,33 +45,11 @@ done
 helm repo update >/dev/null
 echo "    helm repo update OK"
 
-echo "==> 2. Preflight: are the platform charts published to ghcr?"
-# The 5 platform components are pulled from OCI, not the HTTP repos above.
-# If the v0.1.0 release pipeline (build-and-sign.yml) never ran, these won't
-# exist and the demo cannot run regardless of how Helm resolves charts —
-# fail here with an actionable message instead of a cryptic pull error later.
-if ! helm show chart "${OCI_REPO}/agent-gateway" --version 0.1.0 >/dev/null 2>&1; then
-  cat >&2 <<'EOF'
-    FAIL: cannot pull agent-gateway 0.1.0 from oci://ghcr.io/lee-mcfaul2/charts
-
-    The 5 platform charts + their container images are published only by the
-    `Build and sign` workflow in each component repo, which fires on a pushed
-    `v*` git tag. The v0.1.0 tags exist locally but the packages aren't
-    readable. Either:
-      - the v0.1.0 tags were never pushed / the release workflow never ran, or
-      - the ghcr packages are private — run:
-          helm registry login ghcr.io -u <user>
-          docker login ghcr.io -u <user>     # so the cluster/you can pull images
-        and re-run this script.
-EOF
-  exit 1
-fi
-echo "    OK (oci://ghcr.io/lee-mcfaul2/charts reachable)"
-
-echo "==> 3. helm dependency update (resolves + fetches all 13 subcharts)"
-# `update` not `build`: one dependency (agent-sql-mcp) is a local file://
-# override, so Chart.lock is regenerated here rather than committed. This
-# also recreates chart/charts/ from scratch on every run.
+echo "==> 2. helm dependency update (resolves + fetches all 13 subcharts)"
+# `update` not `build`: all platform charts (plus demo-ui, local-llm, and
+# traffic-gen) are local file://./charts-local/* overrides, so Chart.lock is
+# regenerated here rather than committed. This also recreates chart/charts/
+# from scratch on every run.
 helm dependency update ./chart
 
 if [[ "${SKIP_INSTALL:-0}" == "1" ]]; then
@@ -78,7 +57,7 @@ if [[ "${SKIP_INSTALL:-0}" == "1" ]]; then
   exit 0
 fi
 
-echo "==> 4. Creating namespaces"
+echo "==> 3. Creating namespaces"
 # The umbrella spans four namespaces and several subcharts ship pre-install
 # hooks (e.g. agent-sql-mcp's DB migration Job in namespace mcp). Helm runs
 # pre-install hooks BEFORE normal manifests, so a chart-templated Namespace
@@ -103,7 +82,7 @@ kind: Namespace
 metadata: { name: sandbox, labels: { linkerd.io/inject: enabled } }
 EOF
 
-echo "==> 5. Preflight: clear any stuck prior ${RELEASE} state (scoped; shared cluster safe)"
+echo "==> 4. Preflight: clear any stuck prior ${RELEASE} state (scoped; shared cluster safe)"
 status=$(helm -n "$NAMESPACE" status "$RELEASE" -o json 2>/dev/null | jq -r '.info.status // empty' 2>/dev/null || true)
 if [ -n "$status" ] && [ "$status" != "deployed" ]; then
   echo "    release status=$status (not deployed) — uninstalling ${RELEASE} only"
@@ -124,7 +103,7 @@ if [ -n "$status" ] && [ "$status" != "deployed" ]; then
     --ignore-not-found 2>/dev/null || true
 fi
 
-echo "==> 6. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE}"
+echo "==> 5. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE}"
 helm upgrade --install "$RELEASE" ./chart \
   --namespace "$NAMESPACE" \
   -f "$VALUES" --wait
