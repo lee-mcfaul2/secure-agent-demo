@@ -1,0 +1,99 @@
+image:
+  repository: ghcr.io/lee-mcfaul2/agent-gateway
+  tag: 0.1.0
+  pullPolicy: IfNotPresent
+
+replicas: 2
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 2
+    memory: 2Gi
+
+namespace: gateway
+sandboxNamespace: sandbox
+
+opa:
+  image: openpolicyagent/opa:1.6.0
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+oidc:
+  issuer: ""
+  audience: ag-gateway
+
+tokenizer:
+  url: http://pii-tokenizer.platform.svc.cluster.local:8443
+
+bundle:
+  ref: ""
+  cosignSecretName: gateway-cosign-key
+  cosignSecretKey: cosign.pub
+  # ☢️ DEMO-ONLY: mount a pre-seeded prompt-bundle PVC instead of pulling a
+  # signed OCI bundle. See template note — the gateway binary does NOT yet
+  # support a local-path bundle source; demoMode wires the volume + drops the
+  # cosign secret, but the env switch is blocked pending a binary contract.
+  demoMode: false
+  demoPvcName: prompt-bundle
+  demoPvcNamespace: platform
+  demoMountPath: /var/lib/prompts
+
+audit:
+  databaseSecretName: gateway-audit-db
+  databaseSecretKey: dsn
+  # ☢️ DEMO-ONLY: when set, the chart creates the audit DB Secret from this DSN
+  # so the gateway's unconditional secretKeyRef resolves without an external
+  # Secret. Leave "" in production (Secret must be provisioned out-of-band).
+  demoDsn: ""
+
+agentJob:
+  image: ghcr.io/lee-mcfaul2/agent-sandbox:0.1.0
+  timeoutSeconds: 300
+
+llmProviders:
+  # Empty secret name omits the corresponding API-key env entirely (ollama/mock
+  # demo modes never use external provider keys). Set a name to inject the key.
+  anthropicSecretName: ""
+  anthropicSecretKey: api-key
+  openaiSecretName: ""
+  openaiSecretKey: api-key
+
+service:
+  port: 8000
+
+# LLM Guard sibling-service integration.
+# Default: enabled=true. base_url MUST be set in production deployments; the
+# gateway boot will fail otherwise (fail-closed). To disable for dev only,
+# explicitly set enabled=false and accept that prompt-injection scanning is off.
+llm_guard:
+  enabled: true
+  base_url: ""
+  timeout_seconds: 2.0
+
+# LiteLLM routing config rendered into the agent-gateway-litellm ConfigMap.
+# mode selects the demo backend: ollama (default, local Llama) | anthropic | mock.
+# mock injects a canned litellm_settings.mock_response so no real LLM is called.
+litellm:
+  mode: ollama          # ollama | anthropic | mock
+  model_list:
+    - model_name: "claude-sonnet-4-6"
+      litellm_params:
+        model: "ollama_chat/llama3.2:3b"
+        api_base: "http://local-llm.platform.svc.cluster.local:11434"
+
+# Models the gateway will route through LiteLLM. Caller may request any of these
+# via the `model` field; otherwise default_model is used.
+models:
+  default_model: "claude-sonnet-4-6"
+  allowed_models: "claude-sonnet-4-6,claude-opus-4-7,gpt-4o"
+
+# Gateway's own MCP-proxy URL, exposed to sandboxes via GATEWAY_MCP_URL env.
+gateway_mcp_internal_url: "http://agent-gateway.gateway.svc.cluster.local:8080"

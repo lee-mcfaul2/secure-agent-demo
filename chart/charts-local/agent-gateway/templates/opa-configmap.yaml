@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-gateway-policy
+  namespace: {{ .Values.namespace }}
+data:
+  authz.rego: |-
+{{ .Files.Get "policy/authz.rego" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-gateway-policy-data
+  namespace: {{ .Values.namespace }}
+data:
+  permissions.json: |-
+{{ .Files.Get "policy/data/permissions.json" | indent 4 }}

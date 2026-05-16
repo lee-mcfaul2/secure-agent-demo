@@ -1,0 +1,9 @@
+apiVersion: v2
+name: agent-sandbox
+description: Pod template + RBAC + mesh policies for agent-sandbox one-shot Jobs.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/lee-mcfaul2/agent-sandbox
+sources:
+  - https://github.com/lee-mcfaul2/agent-sandbox

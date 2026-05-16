@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pii-tokenizer-egress
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels: { app: pii-tokenizer }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: { matchLabels: { app: redis } }
+      ports:
+        - port: 6379
+          protocol: TCP
+    {{- if eq .Values.kmaster.backend "vault-transit" }}
+    - to:
+        - podSelector: { matchLabels: { app: vault } }
+      ports:
+        - port: 8200
+          protocol: TCP
+    {{- end }}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }

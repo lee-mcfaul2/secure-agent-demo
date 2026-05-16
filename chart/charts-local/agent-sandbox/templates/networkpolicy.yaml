@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-sandbox-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "agent-sandbox.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: agent-sandbox
+  policyTypes:
+    - Ingress
+    - Egress
+  # No inbound traffic.
+  ingress: []
+  # Egress only to the gateway namespace + DNS for cluster.local.
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.linkerd.gateway.namespace }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

@@ -1,0 +1,11 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: pii-tokenizer
+spec:
+  spiffeIDTemplate: "spiffe://ai-security.io/ns/{{ .Values.namespace }}/sa/pii-tokenizer-sa"
+  podSelector:
+    matchLabels: { app: pii-tokenizer }
+  workloadSelectorTemplates:
+    - "k8s:ns:{{ .Values.namespace }}"
+    - "k8s:sa:pii-tokenizer-sa"

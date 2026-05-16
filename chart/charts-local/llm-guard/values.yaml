@@ -1,0 +1,58 @@
+namespace: platform
+
+image:
+  repository: ghcr.io/lee-mcfaul2/llm-guard
+  tag: ""           # operator sets via --set image.tag=vX.Y.Z
+  digest: ""        # optional pin
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "2"
+    memory: "3Gi"
+
+config:
+  inbound_scanners: "prompt_injection,secrets,ban_substrings,toxicity,ban_topics"
+  outbound_scanners: "secrets,prompt_injection,malicious_urls,sensitive"
+  ban_topics: "violence,illegal_activity"
+  prompt_injection_block_threshold: "0.7"
+  secrets_block_threshold: "1.0"
+  toxicity_block_threshold: "0.8"
+  ban_topics_block_threshold: "0.7"
+  malicious_urls_block_threshold: "0.9"
+  sensitive_block_threshold: "0.6"
+  malicious_urls_timeout_seconds: "0.5"
+
+# Mounted ConfigMap with the lib-agent-prompt-shared pii-types.json.
+# In a real deployment this is populated from the lib-agent-prompt OCI bundle's
+# shared schemas; for tests we use the in-repo fixture.
+piiTypes:
+  content: |
+    {
+      "categories": []
+    }
+
+linkerd:
+  trustDomain: cluster.local
+  gateway:
+    namespace: gateway
+    serviceAccount: agent-gateway-sa
+
+service:
+  # Externally-reachable Service port. Set to 8000 to match the demo docs
+  # (docs/walkthrough.md + docs/troubleshooting.md curl llm-guard on :8000).
+  # The container still listens on 8080 (LLM_GUARD_PORT / containerPort:
+  # named "http"); Service port 8000 -> targetPort http(8080).
+  port: 8000
+
+prometheus:
+  serviceMonitor:
+    enabled: true
+
+spire:
+  enabled: true

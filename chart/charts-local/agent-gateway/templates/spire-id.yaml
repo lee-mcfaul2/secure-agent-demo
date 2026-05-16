@@ -1,0 +1,11 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: agent-gateway
+spec:
+  spiffeIDTemplate: "spiffe://ai-security.io/ns/{{ .Values.namespace }}/sa/agent-gateway-sa"
+  podSelector:
+    matchLabels: { app: agent-gateway }
+  workloadSelectorTemplates:
+    - "k8s:ns:{{ .Values.namespace }}"
+    - "k8s:sa:agent-gateway-sa"

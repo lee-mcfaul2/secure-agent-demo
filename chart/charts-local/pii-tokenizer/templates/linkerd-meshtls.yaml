@@ -1,0 +1,8 @@
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: agent-gateway-only
+  namespace: {{ .Values.namespace }}
+spec:
+  identities:
+    - "agent-gateway.gateway.serviceaccount.identity.linkerd.cluster.local"

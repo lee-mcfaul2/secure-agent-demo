@@ -1,0 +1,16 @@
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: llm-guard-allow-gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-guard.labels" . | nindent 4 }}
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: llm-guard
+  requiredAuthenticationRefs:
+    - kind: MeshTLSAuthentication
+      name: agent-gateway-mtls
+      group: policy.linkerd.io

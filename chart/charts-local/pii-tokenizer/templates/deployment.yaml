@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pii-tokenizer
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: { app: pii-tokenizer }
+  template:
+    metadata:
+      labels: { app: pii-tokenizer }
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      serviceAccountName: pii-tokenizer-sa
+      containers:
+        - name: tokenizer
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8443
+          env:
+            - { name: TOKENIZER_LISTEN_ADDR, value: ":8443" }
+            - { name: TOKENIZER_KMASTER_BACKEND, value: "{{ .Values.kmaster.backend }}" }
+            - { name: TOKENIZER_AEAD_KEY_PATH, value: "/etc/tokenizer/kmaster" }
+            - { name: TOKENIZER_REDIS_MODE, value: "{{ .Values.redis.mode }}" }
+            - { name: TOKENIZER_REDIS_ADDRS, value: "{{ .Values.redis.addrs }}" }
+            {{- if eq .Values.kmaster.backend "vault-transit" }}
+            - { name: VAULT_ADDR, value: "{{ .Values.kmaster.vault.addr }}" }
+            - { name: VAULT_TRANSIT_KEY, value: "{{ .Values.kmaster.vault.keyName }}" }
+            {{- end }}
+            {{- if eq .Values.kmaster.backend "aws-kms" }}
+            - { name: AWS_REGION, value: "{{ .Values.kmaster.awsKms.region }}" }
+            - { name: TOKENIZER_AWS_KMS_KEY_ID, value: "{{ .Values.kmaster.awsKms.keyId }}" }
+            {{- end }}
+            {{- if eq .Values.kmaster.backend "pkcs11" }}
+            - { name: TOKENIZER_PKCS11_LIB, value: "{{ .Values.kmaster.pkcs11.lib }}" }
+            - { name: TOKENIZER_PKCS11_SLOT, value: "{{ .Values.kmaster.pkcs11.slot }}" }
+            - { name: TOKENIZER_PKCS11_LABEL, value: "{{ .Values.kmaster.pkcs11.label }}" }
+            {{- end }}
+          volumeMounts:
+            {{- if eq .Values.kmaster.backend "aead-local" }}
+            - { name: kmaster, mountPath: /etc/tokenizer/kmaster, readOnly: true }
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8443 }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8443 }
+            periodSeconds: 5
+      volumes:
+        {{- if eq .Values.kmaster.backend "aead-local" }}
+        - name: kmaster
+          secret:
+            secretName: {{ .Values.kmaster.aeadLocal.secretName }}
+        {{- end }}

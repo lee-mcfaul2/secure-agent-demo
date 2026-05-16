@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-gateway-egress
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels: { app: agent-gateway }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { name: platform } }
+          podSelector: { matchLabels: { app: pii-tokenizer } }
+      ports:
+        - { port: 8443, protocol: TCP }
+    - to:
+        - namespaceSelector: { matchLabels: { name: mcp } }
+      ports:
+        - { port: 8443, protocol: TCP }
+    - to:
+        - namespaceSelector: { matchLabels: { name: kube-system } }
+      ports:
+        - { port: 443, protocol: TCP }
+    - to:
+        - namespaceSelector: { matchLabels: { name: platform } }
+          podSelector: { matchLabels: { app: keycloak } }
+      ports:
+        - { port: 8080, protocol: TCP }
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0 }
+      ports:
+        - { port: 443, protocol: TCP }
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }

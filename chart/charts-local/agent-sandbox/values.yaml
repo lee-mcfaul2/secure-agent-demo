@@ -1,0 +1,31 @@
+namespace: sandbox
+
+image:
+  repository: ghcr.io/lee-mcfaul2/agent-sandbox
+  tag: ""  # always pinned by digest at chart-publish time
+  digest: ""
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  name: agent-sandbox-sa
+
+linkerd:
+  trustDomain: cluster.local
+  gateway:
+    namespace: gateway
+    serviceAccount: agent-gateway-sa
+
+resources:
+  cpu: "500m"
+  memory: "256Mi"
+  ephemeralStorage: "32Mi"
+
+job:
+  activeDeadlineSecondsBuffer: 30  # added on top of WALLCLOCK_TIMEOUT_SECONDS
+  ttlSecondsAfterFinished: 60
+
+spire:
+  enabled: true
+
+gvisor:
+  install: false  # cluster admins install the RuntimeClass separately by default

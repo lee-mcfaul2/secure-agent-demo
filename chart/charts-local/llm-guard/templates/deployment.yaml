@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "llm-guard.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-guard.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: llm-guard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: llm-guard
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      serviceAccountName: llm-guard-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: llm-guard
+          image: {{ printf "%s%s" .Values.image.repository (ternary (printf "@%s" .Values.image.digest) (printf ":%s" (default .Chart.AppVersion .Values.image.tag)) (ne .Values.image.digest "")) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: LLM_GUARD_PORT
+              value: "8080"
+            - name: LLM_GUARD_PII_TYPES_PATH
+              value: /etc/llm-guard/pii-types.json
+            - name: LLM_GUARD_INBOUND_SCANNERS
+              value: {{ .Values.config.inbound_scanners | quote }}
+            - name: LLM_GUARD_OUTBOUND_SCANNERS
+              value: {{ .Values.config.outbound_scanners | quote }}
+            - name: LLM_GUARD_BAN_TOPICS
+              value: {{ .Values.config.ban_topics | quote }}
+            - name: LLM_GUARD_PROMPT_INJECTION_BLOCK_THRESHOLD
+              value: {{ .Values.config.prompt_injection_block_threshold | quote }}
+            - name: LLM_GUARD_SECRETS_BLOCK_THRESHOLD
+              value: {{ .Values.config.secrets_block_threshold | quote }}
+            - name: LLM_GUARD_TOXICITY_BLOCK_THRESHOLD
+              value: {{ .Values.config.toxicity_block_threshold | quote }}
+            - name: LLM_GUARD_BAN_TOPICS_BLOCK_THRESHOLD
+              value: {{ .Values.config.ban_topics_block_threshold | quote }}
+            - name: LLM_GUARD_MALICIOUS_URLS_BLOCK_THRESHOLD
+              value: {{ .Values.config.malicious_urls_block_threshold | quote }}
+            - name: LLM_GUARD_SENSITIVE_BLOCK_THRESHOLD
+              value: {{ .Values.config.sensitive_block_threshold | quote }}
+            - name: LLM_GUARD_MALICIOUS_URLS_TIMEOUT_SECONDS
+              value: {{ .Values.config.malicious_urls_timeout_seconds | quote }}
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 18  # tolerate 90s of slow model load
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: pii-types
+              mountPath: /etc/llm-guard
+              readOnly: true
+      volumes:
+        - name: pii-types
+          configMap:
+            name: llm-guard-pii-types

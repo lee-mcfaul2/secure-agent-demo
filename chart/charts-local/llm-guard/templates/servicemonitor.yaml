@@ -1,0 +1,17 @@
+{{- if .Values.prometheus.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: llm-guard
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-guard.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: llm-guard
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+{{- end }}

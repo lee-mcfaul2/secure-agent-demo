@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-gateway-litellm
+  namespace: {{ .Values.namespace }}
+data:
+  litellm_config.yaml: |-
+    model_list:
+    {{- range .Values.litellm.model_list }}
+      - model_name: {{ .model_name | quote }}
+        litellm_params:
+          model: {{ .litellm_params.model | quote }}
+          {{- if .litellm_params.api_base }}
+          api_base: {{ .litellm_params.api_base | quote }}
+          {{- end }}
+          {{- if .litellm_params.api_key }}
+          api_key: {{ .litellm_params.api_key | quote }}
+          {{- end }}
+    {{- end }}
+    {{- if eq .Values.litellm.mode "mock" }}
+    litellm_settings:
+      mock_response: "This is a canned demo response."
+    {{- end }}

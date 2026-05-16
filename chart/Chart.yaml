@@ -38,19 +38,19 @@ dependencies:
     condition: customer-db.enabled
   - name: pii-tokenizer
     version: "0.1.0"
-    repository: oci://ghcr.io/lee-mcfaul2/charts
+    repository: "file://./charts-local/pii-tokenizer"
     condition: pii-tokenizer.enabled
   - name: llm-guard
     version: "0.1.0"
-    repository: oci://ghcr.io/lee-mcfaul2/charts
+    repository: "file://./charts-local/llm-guard"
     condition: llm-guard.enabled
   - name: agent-gateway
     version: "0.1.0"
-    repository: oci://ghcr.io/lee-mcfaul2/charts
+    repository: "file://./charts-local/agent-gateway"
     condition: agent-gateway.enabled
   - name: agent-sandbox
     version: "0.1.0"
-    repository: oci://ghcr.io/lee-mcfaul2/charts
+    repository: "file://./charts-local/agent-sandbox"
     condition: agent-sandbox.enabled
   # Local patched override: the published agent-sql-mcp 0.1.0 ships a
   # pre-install migration hook that needs a DB + secret Helm only creates as

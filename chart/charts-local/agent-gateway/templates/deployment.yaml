@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-gateway
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: { app: agent-gateway }
+  template:
+    metadata:
+      labels: { app: agent-gateway }
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      serviceAccountName: agent-gateway-sa
+      containers:
+        - name: gateway
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          env:
+            - { name: GATEWAY_LISTEN_ADDR,     value: ":8000" }
+            - { name: GATEWAY_OIDC_ISSUER,     value: "{{ .Values.oidc.issuer }}" }
+            - { name: GATEWAY_OIDC_AUDIENCE,   value: "{{ .Values.oidc.audience }}" }
+            - { name: GATEWAY_TOKENIZER_URL,   value: "{{ .Values.tokenizer.url }}" }
+            - { name: GATEWAY_OPA_URL,         value: "http://localhost:8181" }
+            - { name: GATEWAY_PROMPT_BUNDLE_REF, value: "{{ .Values.bundle.ref }}" }
+            {{- if .Values.bundle.demoMode }}
+            # DEMO-ONLY: load the bundle from the mounted PVC path and skip
+            # cosign/oras. This env takes precedence over the OCI ref above.
+            - { name: GATEWAY_PROMPT_BUNDLE_PATH, value: {{ .Values.bundle.demoMountPath | quote }} }
+            {{- end }}
+            - { name: GATEWAY_AGENT_JOB_NAMESPACE, value: "{{ .Values.sandboxNamespace }}" }
+            - { name: GATEWAY_AGENT_JOB_IMAGE, value: "{{ .Values.agentJob.image }}" }
+            - { name: GATEWAY_AGENT_JOB_TIMEOUT_SECONDS, value: "{{ .Values.agentJob.timeoutSeconds }}" }
+            {{- if not .Values.bundle.demoMode }}
+            - name: GATEWAY_PROMPT_BUNDLE_COSIGN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bundle.cosignSecretName }}
+                  key:  {{ .Values.bundle.cosignSecretKey }}
+            {{- end }}
+            - name: GATEWAY_AUDIT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.audit.databaseSecretName }}
+                  key:  {{ .Values.audit.databaseSecretKey }}
+            {{- if .Values.llmProviders.anthropicSecretName }}
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.llmProviders.anthropicSecretName }}
+                  key:  {{ .Values.llmProviders.anthropicSecretKey }}
+            {{- end }}
+            {{- if .Values.llmProviders.openaiSecretName }}
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.llmProviders.openaiSecretName }}
+                  key:  {{ .Values.llmProviders.openaiSecretKey }}
+            {{- end }}
+          volumeMounts:
+            - { name: litellm-config, mountPath: /etc/gateway, readOnly: true }
+            {{- if .Values.bundle.demoMode }}
+            - { name: prompt-bundle, mountPath: {{ .Values.bundle.demoMountPath | quote }}, readOnly: true }
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8000 }
+            periodSeconds: 5
+        - name: opa
+          image: "{{ .Values.opa.image }}"
+          args: ["run", "--server", "--addr=:8181", "/policy", "/data"]
+          ports:
+            - containerPort: 8181
+          volumeMounts:
+            - { name: policy,        mountPath: /policy,  readOnly: true }
+            - { name: policy-data,   mountPath: /data,    readOnly: true }
+          resources:
+            {{- toYaml .Values.opa.resources | nindent 12 }}
+      volumes:
+        - name: litellm-config
+          configMap: { name: agent-gateway-litellm }
+        - name: policy
+          configMap: { name: agent-gateway-policy }
+        - name: policy-data
+          configMap: { name: agent-gateway-policy-data }
+        {{- if .Values.bundle.demoMode }}
+        - name: prompt-bundle
+          persistentVolumeClaim:
+            claimName: {{ .Values.bundle.demoPvcName }}
+        {{- end }}

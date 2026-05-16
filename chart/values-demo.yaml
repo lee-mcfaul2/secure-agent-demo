@@ -123,119 +123,150 @@ dex:
 
 pii-tokenizer:
   enabled: true
-  replicaCount: 1
-  namespaceOverride: platform
+  # chart reads `replicas` (not replicaCount) — contract map §4
+  replicas: 1
+  # chart reads `namespace` (not namespaceOverride) — contract map §4
+  namespace: platform
+  # Container listen addr is hardcoded :8443; Service targetPort + Linkerd
+  # Server are also 8443. Keep Service 8443 (contract map §4 CONFLICT decision:
+  # do NOT use the old demo 8080). Gateway tokenizer.url must also be :8443.
   service:
-    port: 8080
-  # ==========================================================================
-  # ☢️  DEMO-ONLY TOKENIZER MASTER KEY — committed in plaintext, on purpose. ☢️
-  # This AES master key (chart/demo-secrets/k_master.txt, see its README) is
-  # baked in so `make demo` is genuinely turnkey — zero manual setup. Committing
-  # a tokenizer master key is a severe anti-pattern: anyone with this repo can
-  # decrypt every PII token it ever produces. It is acceptable ONLY because this
-  # is a throwaway local-KIND demo with no real data behind it. In production
-  # this comes from a KMS/HSM via go-kms-wrapping and is never in source.
-  # Override for anything real by passing -f chart/values-secrets.yaml.
-  # ==========================================================================
-  k_master: "PUXt6hTOiQQftmsJFgOtbWXz+vLCQ3NsRf+9qDwUQVY="
+    port: 8443
+  kmaster:
+    backend: aead-local
+    aeadLocal:
+      secretName: pii-tokenizer-kmaster
+    # ========================================================================
+    # ☢️  DEMO-ONLY TOKENIZER MASTER KEY — committed in plaintext, on purpose. ☢️
+    # This AES master key (chart/demo-secrets/k_master.txt, see its README) is
+    # baked in so `make demo` is genuinely turnkey — zero manual setup. Committing
+    # a tokenizer master key is a severe anti-pattern: anyone with this repo can
+    # decrypt every PII token it ever produces. It is acceptable ONLY because this
+    # is a throwaway local-KIND demo with no real data behind it. In production
+    # this comes from a KMS/HSM via go-kms-wrapping and is never in source.
+    # Override for anything real by passing -f chart/values-secrets.yaml.
+    # ========================================================================
+    demoKey: "PUXt6hTOiQQftmsJFgOtbWXz+vLCQ3NsRf+9qDwUQVY="
+  # chart reads `redis.mode`/`redis.addrs`. A Redis Service must exist at this
+  # addr (provisioned elsewhere — see contract map §4 redis note).
   redis:
-    enabled: true
-    persistence: { enabled: true, size: 500Mi }
-  networkPolicy:
-    # Only gateway can call us.
-    allowedNamespaces:
-      - gateway
-  serviceMonitor:
-    enabled: true
-    namespace: platform
+    mode: single
+    addrs: "redis.platform.svc.cluster.local:6379"
   resources:
     requests: { cpu: "100m", memory: "256Mi" }
     limits:   { cpu: "1",    memory: "512Mi" }
 
 llm-guard:
   enabled: true
+  # chart reads `replicaCount` (key matches) — contract map §3
   replicaCount: 1
-  namespaceOverride: platform
+  # chart reads `namespace` (not namespaceOverride) — contract map §3
+  namespace: platform
+  # Service port 8000 to match demo docs (Step A / contract map §3 CONFLICT
+  # decision). Chart Service: port 8000 -> targetPort http(container 8080).
   service:
     port: 8000
-  piiTypes:
-    # Mount the platform-level pii-types ConfigMap (defined in T7).
-    configMapName: pii-types
-    mountPath: /etc/llm-guard
-  scanners:
-    promptInjection: { enabled: true,  threshold: 0.8 }
-    toxicity:        { enabled: true,  threshold: 0.7 }
-    secrets:         { enabled: true }
-  failClosed: true  # per workspace memory ai_security_fail_closed_default
-  networkPolicy:
-    allowedNamespaces:
-      - gateway
-  serviceMonitor:
-    enabled: true
-    namespace: platform
+  # Gateway is the only caller; chart drives its NetworkPolicy + MeshTLS off
+  # linkerd.gateway.{namespace,serviceAccount} (the old demo
+  # networkPolicy.allowedNamespaces / scanners.* / piiTypes.configMapName keys
+  # are NOT read by the chart — contract map §3).
+  linkerd:
+    gateway:
+      namespace: gateway
+      serviceAccount: agent-gateway-sa
+  prometheus:
+    serviceMonitor:
+      enabled: true
   resources:
     requests: { cpu: "500m", memory: "1Gi" }
     limits:   { cpu: "2",    memory: "4Gi" }
 
 agent-gateway:
   enabled: true
-  replicaCount: 2
-  namespaceOverride: gateway
+  # chart reads `replicas` (not replicaCount) — contract map §1
+  replicas: 2
+  # chart reads `namespace` (not namespaceOverride) — contract map §1
+  namespace: gateway
+  sandboxNamespace: sandbox
+  # Chart Service has no type/nodePort fields (always ClusterIP) and hardcodes
+  # targetPort 8000. Service port = .Values.service.port → set 8080 so
+  # `port-forward svc/agent-gateway 8080:8080` (walkthrough) works. Contract
+  # map §1: Service port 8080, targetPort 8000.
   service:
-    type: NodePort
     port: 8080
-    nodePort: 30080  # matches kind/demo-cluster.yaml extraPortMappings → host:8080
-  bundle:
-    pvcName: prompt-bundle      # mounted from platform.svc
-    pvcNamespace: platform
-    mountPath: /var/lib/prompts
-  llmGuard:
-    enabled: true
-    baseUrl: http://llm-guard.platform.svc.cluster.local:8000
-  tokenizer:
-    baseUrl: http://pii-tokenizer.platform.svc.cluster.local:8080
   oidc:
     issuer: http://dex.platform.svc.cluster.local:5556/dex
+    # dex staticClient id is `demo-ui` (chart default `ag-gateway` is wrong) —
+    # contract map §1
     audience: demo-ui
-    jwksRefreshSeconds: 60
+  # chart key is tokenizer.url (not tokenizer.baseUrl); pii-tokenizer Service
+  # is 8443 end-to-end — contract map §1/§4
+  tokenizer:
+    url: http://pii-tokenizer.platform.svc.cluster.local:8443
+  # chart key path is llm_guard.* (not llmGuard.*); base_url must match the
+  # llm-guard Service port 8000 (Step A / contract map §1+§3)
+  llm_guard:
+    enabled: true
+    base_url: http://llm-guard.platform.svc.cluster.local:8000
+  # ☢️ DEMO-ONLY: mount a pre-seeded prompt-bundle PVC instead of pulling a
+  # signed OCI bundle. demoMode wires the volume + drops the cosign secret.
+  # (Old demo keys bundle.pvcName/pvcNamespace/mountPath were not read.)
+  bundle:
+    demoMode: true
+    demoPvcName: prompt-bundle
+    demoPvcNamespace: platform
+    demoMountPath: /var/lib/prompts
+  # ☢️ DEMO-ONLY: chart creates the audit DB Secret from this DSN so the
+  # gateway's unconditional secretKeyRef resolves without an external Secret.
+  audit:
+    demoDsn: postgres://customers:customers-demo-pw@customer-db-postgresql.platform.svc.cluster.local:5432/customers?sslmode=disable
+  # Empty secret names omit the external-provider API-key env entirely (ollama
+  # demo mode never uses them) — contract map §1
+  llmProviders:
+    anthropicSecretName: ""
+    openaiSecretName: ""
+  # mode=ollama renders the litellm ConfigMap; the single alias
+  # `claude-sonnet-4-6` (gateway default_model) maps to the local Llama.
   litellm:
     mode: ollama
     model_list:
-      - model_name: "claude-sonnet-4-6"   # gateway's default_model; sandbox sees only this name
+      - model_name: "claude-sonnet-4-6"
         litellm_params:
           model: "ollama_chat/llama3.2:3b"
           api_base: "http://local-llm.platform.svc.cluster.local:11434"
-      - model_name: "llama3.2"
-        litellm_params:
-          model: "ollama_chat/llama3.2:3b"
-          api_base: "http://local-llm.platform.svc.cluster.local:11434"
+  # chart expects allowed_models as a comma string (not a YAML list) —
+  # contract map §1
   models:
-    allowed_models:
-      - claude-sonnet-4-6
-      - llama3.2
-    default_model: claude-sonnet-4-6
-  serviceMonitor:
-    enabled: true
-    namespace: gateway
+    default_model: "claude-sonnet-4-6"
+    allowed_models: "claude-sonnet-4-6,llama3.2"
   resources:
     requests: { cpu: "200m", memory: "512Mi" }
     limits:   { cpu: "2",    memory: "1Gi" }
 
 agent-sandbox:
   enabled: true
-  # The sandbox chart ships a Pod template (NOT a Deployment) that the gateway's
-  # Job launcher uses. We provide the template's contents via values here.
-  podTemplate:
-    namespaceOverride: sandbox
-    bundlePvcName: prompt-bundle
-    bundlePvcNamespace: platform
-    litellmUrl: http://agent-gateway.gateway.svc.cluster.local:8080/litellm
-    mcps:
-      sql:
-        baseUrl: http://agent-sql-mcp.mcp.svc.cluster.local:8081
-    resources:
-      requests: { cpu: "100m", memory: "256Mi" }
-      limits:   { cpu: "1",    memory: "1Gi" }
+  # The sandbox chart ships a Pod-template ConfigMap (NOT a Deployment) the
+  # gateway's Job launcher consumes. Only flat chart keys below are read; the
+  # old podTemplate.* block (namespaceOverride/litellmUrl/mcps/nested resources)
+  # was entirely unread — contract map §2. LITELLM_URL + MCP URLs are injected
+  # by the gateway at Job-creation time, not configured here.
+  # chart reads `namespace` (not namespaceOverride)
+  namespace: sandbox
+  linkerd:
+    gateway:
+      namespace: gateway
+      serviceAccount: agent-gateway-sa
+  # chart wants flat resources.{cpu,memory,ephemeralStorage} (not
+  # requests/limits) — contract map §2
+  resources:
+    cpu: "1"
+    memory: "1Gi"
+    ephemeralStorage: "64Mi"
+  # pod-template hardcodes runtimeClassName: gvisor; install the RuntimeClass
+  # so the demo can schedule (contract map §2 tie-break: walkthrough must
+  # reproduce → gvisor.install: true).
+  gvisor:
+    install: true
 
 # Values match the patched agent-sql-mcp chart contract (charts-local/).
 # The chart now assembles its own DSN Secret from these plain values, so no

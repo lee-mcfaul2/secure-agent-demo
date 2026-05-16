@@ -1,0 +1,13 @@
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: agent-gateway
+  namespace: {{ .Values.namespace }}
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: agent-gateway
+  requiredAuthenticationRefs:
+    - kind: MeshTLSAuthentication
+      name: agent-sandbox-only

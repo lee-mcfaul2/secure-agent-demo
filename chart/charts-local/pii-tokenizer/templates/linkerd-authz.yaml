@@ -1,0 +1,13 @@
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: pii-tokenizer
+  namespace: {{ .Values.namespace }}
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: pii-tokenizer
+  requiredAuthenticationRefs:
+    - kind: MeshTLSAuthentication
+      name: agent-gateway-only

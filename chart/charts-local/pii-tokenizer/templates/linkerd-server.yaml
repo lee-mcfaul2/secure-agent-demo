@@ -1,0 +1,10 @@
+apiVersion: policy.linkerd.io/v1beta1
+kind: Server
+metadata:
+  name: pii-tokenizer
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels: { app: pii-tokenizer }
+  port: 8443
+  proxyProtocol: HTTP/1

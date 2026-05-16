@@ -1,0 +1,10 @@
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: agent-sandbox-identity
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "agent-sandbox.labels" . | nindent 4 }}
+spec:
+  identities:
+    - "{{ .Values.serviceAccount.name }}.{{ .Values.namespace }}.serviceaccount.identity.linkerd.cluster.local"

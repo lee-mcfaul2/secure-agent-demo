@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-sandbox-job-template
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "agent-sandbox.labels" . | nindent 4 }}
+data:
+  pod-template.yaml: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      labels:
+        app: agent-sandbox
+    spec:
+      runtimeClassName: gvisor
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+      containers:
+        - name: sandbox
+          image: {{ printf "%s@%s" .Values.image.repository .Values.image.digest | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            limits:
+              cpu: {{ .Values.resources.cpu }}
+              memory: {{ .Values.resources.memory }}
+              ephemeral-storage: {{ .Values.resources.ephemeralStorage }}
+            requests:
+              cpu: {{ .Values.resources.cpu }}
+              memory: {{ .Values.resources.memory }}
+              ephemeral-storage: {{ .Values.resources.ephemeralStorage }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          # The gateway injects all environment variables at Job creation time;
+          # the placeholders below document what it must provide.
+          env:
+            - name: REQUEST_UUID
+              value: "__INJECTED_BY_GATEWAY__"
+            - name: PROMPT_UUID
+              value: "__INJECTED_BY_GATEWAY__"
+            - name: LITELLM_URL
+              value: "__INJECTED_BY_GATEWAY__"
+            - name: GATEWAY_MCP_URL
+              value: "__INJECTED_BY_GATEWAY__"
+            - name: AVAILABLE_TOOLS
+              value: "__INJECTED_BY_GATEWAY__"
+            - name: TOKENIZED_USER_INPUT
+              value: "__INJECTED_BY_GATEWAY__"
+            - name: MODEL
+              value: "__INJECTED_BY_GATEWAY__"
+            - name: MAX_ITERATIONS
+              value: "__INJECTED_BY_GATEWAY__"
+            - name: WALLCLOCK_TIMEOUT_SECONDS
+              value: "__INJECTED_BY_GATEWAY__"
+            - name: TRACEPARENT
+              value: "__INJECTED_BY_GATEWAY__"

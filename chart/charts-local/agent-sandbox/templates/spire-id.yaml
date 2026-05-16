@@ -1,0 +1,16 @@
+{{- if .Values.spire.enabled }}
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: agent-sandbox
+  labels:
+    {{- include "agent-sandbox.labels" . | nindent 4 }}
+spec:
+  spiffeIDTemplate: "spiffe://{{`{{ .TrustDomain }}`}}/ns/{{ .Values.namespace }}/sa/{{ .Values.serviceAccount.name }}"
+  podSelector:
+    matchLabels:
+      app: agent-sandbox
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: {{ .Values.namespace }}
+{{- end }}

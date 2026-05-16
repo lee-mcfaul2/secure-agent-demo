@@ -1,0 +1,16 @@
+{{- if .Values.spire.enabled }}
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: llm-guard
+  labels:
+    {{- include "llm-guard.labels" . | nindent 4 }}
+spec:
+  spiffeIDTemplate: "spiffe://{{`{{ .TrustDomain }}`}}/ns/{{ .Values.namespace }}/sa/llm-guard-sa"
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: llm-guard
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: {{ .Values.namespace }}
+{{- end }}

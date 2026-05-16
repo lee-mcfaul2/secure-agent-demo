@@ -1,0 +1,13 @@
+apiVersion: policy.linkerd.io/v1beta1
+kind: Server
+metadata:
+  name: llm-guard
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "llm-guard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: llm-guard
+  port: http
+  proxyProtocol: HTTP/1
