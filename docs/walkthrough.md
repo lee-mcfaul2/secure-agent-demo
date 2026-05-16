@@ -4,29 +4,48 @@ A guided tour of the platform's security layers. Estimated time: 15 minutes.
 
 ## Prerequisites
 
-- Linux/macOS host with Docker, `kind`, `kubectl`, `helm`, `jq`, `curl`, `make`
-- 8GB+ free RAM (Ollama needs 4-8GB; the rest fits in another 2GB)
-- ~10GB free disk
+- A Kubernetes cluster with a default StorageClass, and `kubectl` pointed at it
+- `helm` 3.8+, `jq`, `curl`, `make`
+- ~2 vCPU / ~4Gi of schedulable headroom (the local LLM pod is the heaviest;
+  disable it in values for a lean install)
 
-## 1. Bring up the platform
+## 1. Install the platform
 
 ```bash
 git clone https://github.com/lee-mcfaul2/ai-security
 cd ai-security/secure-agent-demo
-make demo
+
+kubectl config use-context <your-cluster>   # pick the target cluster
+make install                                # installs into that cluster
 ```
 
-Turnkey — no setup. The demo ships with a baked-in throwaway
-`pii-tokenizer` master key and Linkerd CA (see `chart/demo-secrets/README.md`
-and `chart/demo-ca/README.md` — both are deliberate, loudly-flagged
-demo-only anti-patterns, never for reuse). To override with your own key,
-create `chart/values-secrets.yaml` (gitignored) with `pii-tokenizer.k_master`
-= `openssl rand -base64 32`; `make demo` layers it on automatically.
+`make install` pulls chart deps, applies the Linkerd + SPIRE CRDs
+out-of-band (they must exist before the release that consumes them), then
+`helm upgrade --install`. It uses your **current kubectl context** and does
+not touch `~/.kube/config` otherwise. (Raw `helm` equivalent is in the
+repo `README.md`.)
 
-This takes 5–8 minutes cold (downloads upstream charts + pulls llama3.2:3b) or
-~2 minutes warm. When complete:
+Turnkey — no secret setup. The chart ships with a baked-in throwaway
+`pii-tokenizer` master key, Linkerd CA, and prompt bundle (see
+`chart/demo-secrets/README.md`, `chart/demo-ca/README.md`,
+`chart/demo-bundle/README.md` — deliberate, loudly-flagged demo-only
+anti-patterns, never for reuse). Override the key by creating
+`chart/values-secrets.yaml` (gitignored) with `pii-tokenizer.k_master` =
+`openssl rand -base64 32`; `make install` layers it automatically.
+
+No cluster handy? `make demo` spins up a throwaway single-node KIND
+cluster (needs Docker/Podman) and installs into it — see
+`docs/troubleshooting.md`. The supported path is `make install` into a
+real cluster.
+
+When pods are ready, expose the components locally:
+
+```bash
+make port-forward
+```
 
 - UI: http://localhost:8081
+- Gateway: http://localhost:8080
 - Grafana: http://localhost:3000 (anonymous read; admin/`prom-operator` to edit)
 - Dex: http://localhost:5556
 
@@ -107,10 +126,14 @@ agent-gateway:
     api_key: "sk-ant-..."
 ```
 
-Then: `make demo` (idempotent — Helm upgrades the gateway in place).
+Then: `make install` (idempotent — Helm upgrades the gateway in place).
 
 ## 8. Tear down
 
 ```bash
-make demo-down     # delete the KIND cluster
+make uninstall     # remove the platform release from your cluster
+# (optional) drop the out-of-band CRDs too — see `make uninstall` output
+
+# if you used the optional local KIND path instead:
+make demo-down     # delete the throwaway KIND cluster
 ```

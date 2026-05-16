@@ -1,17 +1,67 @@
 # secure-agent-demo
 
-Umbrella Helm chart + bring-up scripts for the AI Agent Security Platform demo.
+Umbrella Helm chart for the AI Agent Security Platform. You install it into a
+Kubernetes cluster you already have.
 
-## Quickstart
+## Prerequisites
+
+- A Kubernetes cluster (any conformant cluster: managed, on-prem, k3s, etc.)
+- `kubectl` pointed at it (`kubectl config use-context <ctx>`)
+- `helm` 3.8+
+- The cluster needs a default StorageClass (one small RWO PVC is used) and
+  enough room for the platform (~2 vCPU / ~4Gi of schedulable headroom; the
+  local LLM is the heaviest pod — disable it via values for a lean install).
+
+## Install
 
 ```bash
-make demo            # bring up the full platform on KIND
-make smoke           # verify the happy path + blocked-attack
-make traffic-burst   # fire 50 prompts at the gateway
-make demo-down       # tear down
+# Installs into whatever cluster your current kubectl context points at.
+make install
 ```
 
-See `docs/walkthrough.md` for the demo script and `docs/troubleshooting.md` for common issues.
+`make install` does the non-obvious ordering for you: pulls chart deps,
+applies the Linkerd + SPIRE CRDs out-of-band (they must exist before the
+release that uses them), then `helm upgrade --install`. It uses your
+**ambient** kubeconfig/context — nothing here hijacks or rewrites it.
+
+Prefer raw Helm? The equivalent is:
+
+```bash
+make sync-dashboards sync-traffic-gen        # stage chart file assets
+cd chart && helm dependency update && cd ..
+helm template crds chart/charts/linkerd-crds-*.tgz | kubectl apply --server-side -f -
+helm template crds chart/charts/spire-crds-*.tgz   | kubectl apply --server-side -f -
+kubectl wait --for=condition=Established crd --all --timeout=120s
+helm upgrade --install ai-security ./chart -n platform --create-namespace \
+  -f chart/values-demo.yaml --wait
+```
+
+## Use / tear down
+
+```bash
+make port-forward    # gateway :8080, demo-ui :8081, grafana :3000, dex :5556
+make smoke           # verify happy path + blocked-attack
+make traffic-burst   # fire 50 prompts at the gateway
+make diagnose        # dump cluster state if something is wrong
+make uninstall       # remove the release
+```
+
+The baked-in demo key/CA/bundle (`chart/demo-secrets`, `chart/demo-ca`,
+`chart/demo-bundle`) make this turnkey but are **demo-only anti-patterns** —
+each is loudly flagged in its own README. Override the master key with your
+own by creating `chart/values-secrets.yaml` (gitignored); `make install`
+layers it automatically.
+
+### Optional: throwaway local KIND cluster
+
+If you don't have a cluster and just want to kick the tires locally,
+`make demo` will create a single-node KIND cluster (needs Docker/Podman) in
+an isolated kubeconfig and install into that. KIND is finicky about host
+limits (inotify, cgroups) — see `docs/troubleshooting.md`. The supported path
+is `make install` into a real cluster.
+
+See `docs/walkthrough.md` for the demo script and `docs/troubleshooting.md`
+for common issues.
 
 ## Platform repos
 

@@ -1,4 +1,5 @@
-.PHONY: help demo demo-down kind-up kind-down smoke traffic traffic-burst \
+.PHONY: help install uninstall cluster-check port-forward demo demo-down \
+        kind-up kind-down smoke traffic traffic-burst \
         sync-dashboards sync-traffic-gen dashboards-export logs ui-open grafana-open \
         agentdojo e2e clean test preflight bootstrap diagnose
 
@@ -12,13 +13,11 @@ SECRETS_FILE ?= chart/values-secrets.yaml
 LOCALBIN := $(CURDIR)/.bin
 export PATH := $(LOCALBIN):$(PATH)
 
-# Dedicated, isolated kubeconfig. The demo NEVER reads or writes ~/.kube/config
-# and never changes your current kubectl context. Every kubectl/helm/script in
-# this Makefile inherits this exported KUBECONFIG, and it only ever contains the
-# throwaway kind cluster — so the demo provably cannot touch any other cluster
-# on this machine, even on a re-run where the kind cluster already exists.
-KUBECONFIG := $(CURDIR)/.kube/demo.config
-export KUBECONFIG
+# Primary path is `make install` / `helm install` against an existing cluster
+# you point kubectl at — it uses your AMBIENT kubeconfig/context, nothing here
+# hijacks it. The optional local-KIND convenience path (`make demo`) uses this
+# separate, isolated kubeconfig so KIND never touches ~/.kube/config.
+KIND_KUBECONFIG := $(CURDIR)/.kube/demo.config
 
 # Pinned tool versions (reproducible; KIND v0.24 node image is k8s 1.31).
 KIND_VERSION    ?= v0.24.0
@@ -129,22 +128,22 @@ bootstrap: preflight ## auto-install kind/kubectl/helm/jq into ./.bin if missing
 
 #### KIND ####
 
-kind-up: ## create the KIND cluster if missing (isolated kubeconfig)
-	@mkdir -p $(dir $(KUBECONFIG))
+kind-up: ## (optional, local) create a throwaway KIND cluster
+	@mkdir -p $(dir $(KIND_KUBECONFIG))
 	@if docker info >/dev/null 2>&1; then PROV=""; \
 	 elif podman info >/dev/null 2>&1; then PROV="KIND_EXPERIMENTAL_PROVIDER=podman"; \
 	 else echo "ERROR: no container runtime (run 'make preflight' for guidance)"; exit 1; fi; \
 	 if env $$PROV kind get clusters 2>/dev/null | grep -q "^$(KIND_CLUSTER)$$"; then \
-	   echo "==> kind cluster '$(KIND_CLUSTER)' exists; exporting its kubeconfig to $(KUBECONFIG)"; \
-	   env $$PROV kind export kubeconfig --name $(KIND_CLUSTER) --kubeconfig "$(KUBECONFIG)"; \
+	   echo "==> kind cluster '$(KIND_CLUSTER)' exists; exporting its kubeconfig to $(KIND_KUBECONFIG)"; \
+	   env $$PROV kind export kubeconfig --name $(KIND_CLUSTER) --kubeconfig "$(KIND_KUBECONFIG)"; \
 	 else \
-	   env $$PROV kind create cluster --config kind/demo-cluster.yaml --kubeconfig "$(KUBECONFIG)"; \
+	   env $$PROV kind create cluster --config kind/demo-cluster.yaml --kubeconfig "$(KIND_KUBECONFIG)"; \
 	 fi
-	@kubectl apply -f kind/metrics-server.yaml
+	@KUBECONFIG="$(KIND_KUBECONFIG)" kubectl apply -f kind/metrics-server.yaml
 
-kind-down: ## delete the KIND cluster + its isolated kubeconfig
+kind-down: ## (optional, local) delete the KIND cluster + its isolated kubeconfig
 	@kind delete cluster --name $(KIND_CLUSTER) || true
-	@rm -f "$(KUBECONFIG)"
+	@rm -f "$(KIND_KUBECONFIG)"
 
 #### Sync (build-time prep) ####
 
@@ -157,7 +156,21 @@ sync-traffic-gen: ## copy traffic_gen.py into the subchart so .Files.Get sees it
 
 #### Demo bring-up ####
 
-demo: bootstrap kind-up sync-dashboards sync-traffic-gen ## bring up the full demo (turnkey — no manual setup)
+#### Install into YOUR cluster (primary path) ####
+
+cluster-check: ## verify helm + a reachable cluster (uses your current kubectl context)
+	@command -v helm    >/dev/null 2>&1 || { echo "ERROR: 'helm' not found on PATH (need Helm 3.8+). https://helm.sh/docs/intro/install/"; exit 1; }
+	@command -v kubectl >/dev/null 2>&1 || { echo "ERROR: 'kubectl' not found on PATH. https://kubernetes.io/docs/tasks/tools/"; exit 1; }
+	@kubectl cluster-info >/dev/null 2>&1 || { \
+	  echo "ERROR: kubectl cannot reach a cluster."; \
+	  echo "Point kubectl at the target cluster first, e.g.:"; \
+	  echo "  kubectl config get-contexts"; \
+	  echo "  kubectl config use-context <your-context>"; \
+	  exit 1; }
+	@printf '==> target context: %s\n' "$$(kubectl config current-context 2>/dev/null)"
+	@kubectl version -o yaml 2>/dev/null | grep -i gitVersion | head -2 || true
+
+install: cluster-check sync-dashboards sync-traffic-gen ## install/upgrade the platform into the current kubectl cluster
 	@if [ -f $(SECRETS_FILE) ]; then \
 	  echo "==> using operator-supplied $(SECRETS_FILE) (overrides baked-in demo key)"; \
 	else \
@@ -166,12 +179,11 @@ demo: bootstrap kind-up sync-dashboards sync-traffic-gen ## bring up the full de
 	@echo "==> helm dependency update"
 	@cd chart && helm dependency update
 	@echo "==> installing CRDs out-of-band (Linkerd + SPIRE) before the umbrella"
-	@# The umbrella contains both CRDs and the custom resources that use them.
+	@# The umbrella ships both CRDs and the custom resources that use them.
 	@# Helm validates the whole release against the API server before applying,
-	@# so CRDs defined in the same release aren't visible yet. Render the two
-	@# CRD-only subcharts and apply them first (idempotent, re-run safe; the
-	@# umbrella has linkerd-crds/spire-crds disabled so there's no ownership
-	@# conflict).
+	@# so CRDs defined in the same release aren't visible yet. Apply the two
+	@# CRD-only subcharts first (idempotent, re-run safe; the umbrella has
+	@# linkerd-crds/spire-crds disabled so there is no ownership conflict).
 	@helm template crds chart/charts/linkerd-crds-*.tgz | kubectl apply --server-side -f -
 	@helm template crds chart/charts/spire-crds-*.tgz   | kubectl apply --server-side -f -
 	@echo "==> waiting for CRDs to be Established..."
@@ -183,7 +195,7 @@ demo: bootstrap kind-up sync-dashboards sync-traffic-gen ## bring up the full de
 	   echo "  uninstalling '$$st' release so we do a clean install (pre-install, not pre-upgrade)"; \
 	   helm uninstall $(HELM_RELEASE) -n $(NAMESPACE) --wait --timeout 3m || true; \
 	 fi
-	@echo "==> helm install (verbose: --debug shows hook-by-hook progress)"
+	@echo "==> helm upgrade --install (verbose: --debug shows hook-by-hook progress)"
 	@helm upgrade --install $(HELM_RELEASE) ./chart \
 	  --namespace $(NAMESPACE) --create-namespace \
 	  -f chart/values-demo.yaml \
@@ -196,8 +208,28 @@ demo: bootstrap kind-up sync-dashboards sync-traffic-gen ## bring up the full de
 	       exit 1; }
 	@echo "==> waiting for pods..."
 	@scripts/wait-for-ready.sh
-	@echo "==> port-forward"
+	@echo ""
+	@echo "==> installed. Reach the components with port-forward, e.g.:"
+	@echo "    kubectl -n $(NAMESPACE) port-forward svc/agent-gateway 8080:8080"
+	@echo "    kubectl -n $(NAMESPACE) port-forward svc/demo-ui       8081:80"
+	@echo "    (or run: make port-forward)"
+
+uninstall: ## remove the platform release (leaves out-of-band CRDs in place)
+	@helm uninstall $(HELM_RELEASE) -n $(NAMESPACE) --wait --timeout 5m || true
+	@echo "Release removed. Linkerd/SPIRE CRDs were applied out-of-band and were"
+	@echo "left in place; delete them manually if you want a fully clean cluster:"
+	@echo "  kubectl delete crd -l linkerd.io/control-plane-ns 2>/dev/null || true"
+
+port-forward: ## port-forward gateway + demo-ui + grafana + dex locally
 	@scripts/port-forward-ui.sh
+
+#### Optional: throwaway local KIND cluster ####
+
+demo: bootstrap kind-up sync-dashboards sync-traffic-gen ## (optional) spin up a local KIND cluster and install into it
+	@echo "==> installing into the throwaway KIND cluster ($(KIND_KUBECONFIG))"
+	@KUBECONFIG="$(KIND_KUBECONFIG)" $(MAKE) --no-print-directory install
+	@echo "==> port-forward (KIND)"
+	@KUBECONFIG="$(KIND_KUBECONFIG)" scripts/port-forward-ui.sh
 
 demo-down: kind-down ## tear down
 
