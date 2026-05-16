@@ -5,4 +5,4 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   identities:
-    - "{{ .Values.gatewaySPIFFE }}"
+    - "agent-gateway.gateway.serviceaccount.identity.linkerd.cluster.local"
