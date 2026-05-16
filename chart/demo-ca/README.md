@@ -10,8 +10,8 @@
 identity trust anchor + issuer**, generated once and **committed to version
 control in plaintext**, including the private keys.
 
-This exists for **exactly one reason**: to remove friction from `make demo` so
-the local KIND demo comes up with a working service mesh in a single command,
+This exists for **exactly one reason**: to keep the Helm install turnkey so
+the demo comes up with a working service mesh in a single `helm install`,
 without requiring the operator to install cert-manager or run `step`/`openssl`
 by hand first.
 
@@ -31,8 +31,8 @@ the lights on.**
 
 ## Scope of the blast radius (and why it's acceptable *here only*)
 
-- This CA is **only** trusted inside an ephemeral local KIND cluster you stand
-  up on your own machine and tear down with `make demo-down`.
+- This CA is **only** trusted inside the throwaway demo cluster you install
+  it into, and is gone the moment you `helm uninstall`.
 - It is **never** used for anything reachable from outside that local cluster.
 - The certs are demo fixtures, not secrets — there is nothing of value behind
   them. Treat them as public, because they are.

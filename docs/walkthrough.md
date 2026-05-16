@@ -40,9 +40,9 @@ echo "pii-tokenizer: {k_master: \"$(openssl rand -base64 32)\"}" > chart/values-
 # add: -f chart/values-secrets.yaml  to the helm install above
 ```
 
-No cluster handy? The optional `make demo` spins up a throwaway local
-KIND cluster — see `docs/troubleshooting.md`. Raw `helm install` into a
-real cluster is the supported path.
+Need a cluster? Any conformant Kubernetes works — a managed cluster, a
+single-node k3s, minikube, Docker Desktop's Kubernetes, etc. Point
+`kubectl` at it and run the two commands above.
 
 When pods are ready, expose the components locally:
 
@@ -143,7 +143,4 @@ Helm upgrades the gateway in place).
 helm uninstall ai-security -n platform        # remove the platform release
 kubectl delete -f chart/crds/                 # (optional) drop the CRDs too
 kubectl delete namespace platform gateway mcp sandbox --ignore-not-found
-
-# if you used the optional local KIND path instead:
-make demo-down                                # delete the throwaway KIND cluster
 ```

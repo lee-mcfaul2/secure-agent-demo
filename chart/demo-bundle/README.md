@@ -14,8 +14,8 @@ sandbox, and SQL-MCP mount.
 It exists for **one reason**: in the real platform this PVC is populated by
 **cosign-verifying and pulling the signed `lib-agent-prompt` OCI bundle** —
 supply-chain integrity of the prompt/tool contract is a core point of the
-whole system. That signed bundle is **not published**, so to keep `make demo`
-turnkey we ship an unsigned, unverified fixture instead.
+whole system. That signed bundle is **not published**, so to keep
+`helm install` turnkey we ship an unsigned, unverified fixture instead.
 
 ## Why this is NOT how you do it
 

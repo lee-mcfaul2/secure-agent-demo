@@ -12,8 +12,8 @@ in plaintext**. The same value is inlined into `chart/values-demo.yaml` (that
 inline copy is what Helm actually consumes; this file is for discoverability
 and regeneration).
 
-This exists for **exactly one reason**: to make `make demo` genuinely
-turnkey — clone, `make demo`, done. No `cp values-secrets.example.yaml`, no
+This exists for **exactly one reason**: to make `helm install` genuinely
+turnkey — no secret setup. No `cp values-secrets.example.yaml`, no
 `openssl rand`, no manual edit.
 
 ## Why this is NOT how you do it
@@ -31,8 +31,8 @@ here. This is the anti-pattern, on display, with the lights on.**
 
 ## Scope of the blast radius (and why it's acceptable *here only*)
 
-- Used **only** inside an ephemeral local KIND cluster you stand up yourself
-  and destroy with `make demo-down`.
+- Used **only** inside the throwaway demo cluster you install it into, and
+  gone the moment you `helm uninstall`.
 - The only data it ever protects is synthetic demo seed data — there is
   nothing of value behind it. Treat this key as public, because it is.
 - Its presence is a deliberate, documented friction-vs-correctness trade-off
@@ -40,14 +40,16 @@ here. This is the anti-pattern, on display, with the lights on.**
 
 ## Using a real key instead
 
-`make demo` uses the baked-in key by default. To override, create
-`chart/values-secrets.yaml` (gitignored) with your own:
+The chart uses the baked-in key by default. To override, create
+`chart/values-secrets.yaml` with your own and pass it to Helm:
 
 ```yaml
 pii-tokenizer:
   k_master: "<base64 of 32 random bytes — openssl rand -base64 32>"
 ```
 
-`make demo` automatically layers it on top of `values-demo.yaml` when present.
+```bash
+helm install ... -f chart/values-demo.yaml -f chart/values-secrets.yaml ...
+```
 
 > # ☢️☢️☢️  AGAIN: DO NOT COPY THIS PATTERN  ☢️☢️☢️

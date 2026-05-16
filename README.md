@@ -67,13 +67,12 @@ echo "pii-tokenizer: {k_master: \"$(openssl rand -base64 32)\"}" > chart/values-
 helm install ... -f chart/values-demo.yaml -f chart/values-secrets.yaml ...
 ```
 
-## Optional convenience: a Makefile and local KIND
+## Optional convenience: a Makefile
 
-The repo also has a `Makefile` (`make install`, `make diagnose`,
-`make smoke`, etc.) and a `make demo` that spins up a throwaway local
-KIND cluster — purely optional wrappers around the Helm commands above.
-KIND is finicky about host limits; raw Helm into a real cluster is the
-supported path. See `docs/walkthrough.md` and `docs/troubleshooting.md`.
+The repo includes a thin `Makefile` (`make install`, `make uninstall`,
+`make diagnose`, `make smoke`, `make port-forward`) that just wraps the
+Helm/kubectl commands above — entirely optional. See
+`docs/walkthrough.md` and `docs/troubleshooting.md`.
 
 ## Platform repos
 

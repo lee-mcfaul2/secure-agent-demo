@@ -5,8 +5,5 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
-.kube-cache/
 agentdojo-results.json
 agentdojo-summary.md
-.bin/
-.kube/
