@@ -14,18 +14,50 @@ Kubernetes cluster you already have.
 ## Install
 
 ```bash
-helm dependency build ./chart
+./scripts/bootstrap.sh
+```
 
-helm install ai-security ./chart \
+That's the whole install. The script registers the public Helm repos the
+chart depends on, checks the platform images/charts were published, fetches
+all 13 subcharts, and runs `helm upgrade --install`.
+
+It is **not** a plain `helm dependency build ./chart` because the subchart
+`.tgz` archives are intentionally gitignored (`chart/charts/*.tgz`), so a
+fresh clone has nothing under `chart/charts/`. `helm dependency build` then
+needs the five upstream repos registered first or it fails with
+`no repository definition for https://helm.linkerd.io/stable, ...`.
+
+Equivalent manual steps, if you'd rather not use the script:
+
+```bash
+helm repo add linkerd             https://helm.linkerd.io/stable
+helm repo add spiffe              https://spiffe.github.io/helm-charts-hardened/
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add dex                 https://charts.dexidp.io
+helm repo add bitnami             https://charts.bitnami.com/bitnami
+helm repo update
+
+helm dependency build ./chart
+helm upgrade --install ai-security ./chart \
   --namespace platform --create-namespace \
   -f chart/values-demo.yaml --wait
 ```
 
+### Prerequisite: the platform release must be published
+
+Five subcharts (`agent-gateway`, `agent-sandbox`, `agent-sql-mcp`,
+`pii-tokenizer`, `llm-guard`) and their container images are pulled from
+`ghcr.io/lee-mcfaul2`. They are published only by each component repo's
+`Build and sign` workflow, which fires on a pushed `v*` tag. If that release
+never ran (or the packages are private), `bootstrap.sh` stops at the
+preflight check with instructions — the demo cannot run without those
+artifacts no matter how Helm resolves charts.
+
 The Linkerd + SPIRE CRDs ship in `chart/crds/`, which Helm installs before
 templates, so the platform's `policy.linkerd.io` / `spire.spiffe.io` custom
-resources resolve in a single `helm install`. Dashboards and the traffic-gen
-script are committed in the chart, and `Chart.lock` is committed so
-`helm dependency build` is deterministic.
+resources resolve in a single install. Dashboards and the traffic-gen
+script are committed in the chart, and `Chart.lock` is committed so the
+dependency fetch is deterministic.
 
 The install uses your current `kubectl` context. To upgrade, re-run the
 command as `helm upgrade --install`. To remove:

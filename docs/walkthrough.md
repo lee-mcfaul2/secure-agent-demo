@@ -17,16 +17,19 @@ cd ai-security/secure-agent-demo
 
 kubectl config use-context <your-cluster>   # pick the target cluster
 
-helm dependency build ./chart
-helm install ai-security ./chart \
-  --namespace platform --create-namespace \
-  -f chart/values-demo.yaml --wait
+./scripts/bootstrap.sh
 ```
+
+`bootstrap.sh` registers the upstream Helm repos, verifies the platform
+images/charts were published to `ghcr.io/lee-mcfaul2`, fetches all 13
+subcharts (the `.tgz` archives are gitignored, so a fresh clone has none),
+and runs `helm upgrade --install`. See the README's Install section for the
+equivalent manual steps and the publish prerequisite.
 
 The Linkerd + SPIRE CRDs ship in `chart/crds/` (Helm installs them before
 templates), and the dashboards / traffic-gen script are committed in the
-chart, so a single `helm install` brings the whole platform up using your
-current `kubectl` context.
+chart, so this brings the whole platform up using your current `kubectl`
+context.
 
 Turnkey — no secret setup. The chart ships a baked-in throwaway
 `pii-tokenizer` master key, Linkerd CA, and prompt bundle (see
