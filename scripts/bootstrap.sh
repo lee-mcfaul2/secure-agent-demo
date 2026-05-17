@@ -25,6 +25,50 @@ RELEASE="${RELEASE:-ai-security}"
 NAMESPACE="${NAMESPACE:-platform}"
 VALUES="${VALUES:-chart/values-demo.yaml}"
 HELM_TIMEOUT="${HELM_TIMEOUT:-20m}"
+WATCH_INTERVAL="${WATCH_INTERVAL:-15}"     # secs between live pod snapshots
+HELM_LOG="${HELM_LOG:-/tmp/ai-security-helm.log}"
+NS_ALL=(platform gateway mcp sandbox)
+
+# Live pod table across all four demo namespaces (read-only; shared-cluster safe).
+snapshot() {
+  echo "    ---- pod snapshot $(date +%H:%M:%S) (not-ready first) ----"
+  for ns in "${NS_ALL[@]}"; do
+    out=$(kubectl -n "$ns" get pods --no-headers 2>/dev/null) || continue
+    [ -z "$out" ] && continue
+    echo "    [$ns]"
+    # not-ready (STATUS not Running/Completed) first, then the rest
+    echo "$out" | awk '$3!="Running"&&$3!="Completed"{printf "      ! %-42s %-20s ready=%s restarts=%s\n",$1,$3,$2,$4}'
+    echo "$out" | awk '$3=="Running"||$3=="Completed"{printf "        %-42s %-20s ready=%s\n",$1,$3,$2}'
+  done
+}
+
+# On non-convergence, dump exactly why each stuck pod is stuck.
+diagnose() {
+  echo
+  echo "==> DIAGNOSTICS — helm --wait did not converge; per-pod cause below"
+  for ns in "${NS_ALL[@]}"; do
+    bad=$(kubectl -n "$ns" get pods --no-headers 2>/dev/null \
+      | awk '$3!="Running"&&$3!="Completed"{print $1}') || true
+    [ -z "$bad" ] && continue
+    echo "==== namespace: $ns ===="
+    for p in $bad; do
+      echo ">> POD $ns/$p"
+      kubectl -n "$ns" describe pod "$p" 2>/dev/null | sed -n '/^Events:/,$p' | tail -15
+      for c in $(kubectl -n "$ns" get pod "$p" \
+                   -o jsonpath='{.spec.initContainers[*].name} {.spec.containers[*].name}' 2>/dev/null); do
+        echo "   -- logs: $c (tail 20) --"
+        kubectl -n "$ns" logs "$p" -c "$c" --tail=20 2>/dev/null \
+          || kubectl -n "$ns" logs "$p" -c "$c" --tail=20 --previous 2>/dev/null \
+          || echo "      (no logs yet)"
+      done
+    done
+    echo "---- $ns recent Warning events ----"
+    kubectl -n "$ns" get events --field-selector type=Warning \
+      --sort-by=.lastTimestamp 2>/dev/null | tail -12
+  done
+  echo
+  echo "    full helm output: $HELM_LOG"
+}
 
 # HTTP Helm repos the umbrella resolves against. `helm dependency update`
 # errors with "no repository definition for ..." unless these are
@@ -104,10 +148,34 @@ if [ -n "$status" ] && [ "$status" != "deployed" ]; then
     --ignore-not-found 2>/dev/null || true
 fi
 
-echo "==> 5. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE}"
+echo "==> 5. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE} (timeout ${HELM_TIMEOUT})"
+echo "    helm output -> $HELM_LOG ; live pod status every ${WATCH_INTERVAL}s below"
+echo "    (tail -f $HELM_LOG in another pane for raw helm progress)"
 helm upgrade --install "$RELEASE" ./chart \
   --namespace "$NAMESPACE" \
-  -f "$VALUES" --wait --timeout "$HELM_TIMEOUT"
+  -f "$VALUES" --wait --timeout "$HELM_TIMEOUT" ${HELM_DEBUG:+--debug} \
+  >"$HELM_LOG" 2>&1 &
+helm_pid=$!
+
+while kill -0 "$helm_pid" 2>/dev/null; do
+  snapshot
+  sleep "$WATCH_INTERVAL"
+done
+set +e
+wait "$helm_pid"
+helm_rc=$?
+set -e
+
+echo "    ---- helm log (tail 25) ----"
+tail -n 25 "$HELM_LOG" | sed 's/^/    /'
+
+if [ "$helm_rc" -ne 0 ]; then
+  snapshot
+  diagnose
+  echo
+  echo "==> bootstrap FAILED (helm rc=$helm_rc)"
+  exit "$helm_rc"
+fi
 
 echo
 echo "==> bootstrap PASS — components are up. Reach them with:"
