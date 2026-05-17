@@ -160,8 +160,9 @@ pii-tokenizer:
   redis:
     mode: single
     addrs: "redis.platform.svc.cluster.local:6379"
+  # Shared 4-core node: minimal CPU request (scheduling-only); limit unchanged.
   resources:
-    requests: { cpu: "100m", memory: "256Mi" }
+    requests: { cpu: "25m",  memory: "256Mi" }
     limits:   { cpu: "1",    memory: "512Mi" }
 
 llm-guard:
@@ -185,14 +186,16 @@ llm-guard:
   prometheus:
     serviceMonitor:
       enabled: true
+  # Shared 4-core node: minimal CPU request (scheduling-only); limit unchanged.
   resources:
-    requests: { cpu: "500m", memory: "1Gi" }
+    requests: { cpu: "50m",  memory: "1Gi" }
     limits:   { cpu: "2",    memory: "4Gi" }
 
 agent-gateway:
   enabled: true
-  # chart reads `replicas` (not replicaCount) — contract map §1
-  replicas: 2
+  # chart reads `replicas` (not replicaCount) — contract map §1.
+  # 1 replica: shared 4-core node, no HA needed for the demo.
+  replicas: 1
   # chart reads `namespace` (not namespaceOverride) — contract map §1
   namespace: gateway
   sandboxNamespace: sandbox
@@ -247,8 +250,9 @@ agent-gateway:
   models:
     default_model: "claude-sonnet-4-6"
     allowed_models: "claude-sonnet-4-6,llama3.2"
+  # Shared 4-core node: minimal CPU request (scheduling-only); limit unchanged.
   resources:
-    requests: { cpu: "200m", memory: "512Mi" }
+    requests: { cpu: "50m",  memory: "512Mi" }
     limits:   { cpu: "2",    memory: "1Gi" }
 
 agent-sandbox:
@@ -266,8 +270,10 @@ agent-sandbox:
       serviceAccount: agent-gateway-sa
   # chart wants flat resources.{cpu,memory,ephemeralStorage} (not
   # requests/limits) — contract map §2
+  # Per-sandbox-Job request on a shared 4-core node: keep small so an on-demand
+  # sandbox can actually schedule (cpu is the Job's request, not a limit).
   resources:
-    cpu: "1"
+    cpu: "100m"
     memory: "1Gi"
     ephemeralStorage: "64Mi"
   # pod-template hardcodes runtimeClassName: gvisor; install the RuntimeClass
@@ -297,8 +303,9 @@ agent-sql-mcp:
   oidc:
     issuer: http://dex.platform.svc.cluster.local:5556/dex
     audience: demo-ui
+  # Shared 4-core node: minimal CPU request (scheduling-only); limit unchanged.
   resources:
-    requests: { cpu: "100m", memory: "256Mi" }
+    requests: { cpu: "25m",  memory: "256Mi" }
     limits:   { cpu: "1",    memory: "512Mi" }
 
 kube-prometheus-stack:

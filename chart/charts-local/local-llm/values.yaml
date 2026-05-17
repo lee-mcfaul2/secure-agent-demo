@@ -8,9 +8,12 @@ service:
 storage:
   size: 5Gi
 model: "llama3.2:3b"
+# Shared 4-core node: CPU request is scheduling-only and CPU is compressible,
+# so request low and let inference burst up to the limit. Memory stays high
+# (the model genuinely needs it; memory is not compressible).
 resources:
-  requests: { cpu: "1", memory: "4Gi" }
-  limits:   { cpu: "4", memory: "8Gi" }
+  requests: { cpu: "100m", memory: "4Gi" }
+  limits:   { cpu: "4",    memory: "8Gi" }
 networkPolicy:
   allowedNamespaces:
     - gateway
