@@ -178,21 +178,23 @@ if [ -n "$status" ] && [ "$status" != "deployed" ]; then
 fi
 
 echo "==> 5. Linkerd control plane (separate release; namespace: linkerd)"
-# The original wedge: the Linkerd control plane shared the `platform`
-# namespace, which was labelled linkerd.io/inject=enabled, so the proxy
-# injector double-injected the control-plane pods (Init hang / CrashLoop).
-# Fix: a DEDICATED `linkerd` namespace that is NEVER labelled
-# linkerd.io/inject=enabled. We deliberately do NOT set admission-webhooks
-# =disabled — the standard Linkerd Helm path needs the webhook to mesh the
-# control plane, and it self-bootstraps (webhook failurePolicy=Ignore).
-# The umbrella's platform/gateway/mcp/sandbox namespaces (still inject
-# =enabled) are meshed by this control plane's cluster-scoped webhook.
+# Linkerd's Helm chart renders the control-plane proxies ITSELF (partials.proxy
+# in destination/identity/proxy-injector). The runtime proxy-injector webhook
+# must therefore SKIP the control-plane namespace, or the control plane gets
+# double-injected -> identity Init:0/1 / destination,injector PostStartHookError.
+# The webhook's namespaceSelector is `admission-webhooks NotIn [disabled]`, so
+# the linkerd ns MUST carry config.linkerd.io/admission-webhooks=disabled. It
+# must also NEVER be linkerd.io/inject=enabled (the original platform-ns wedge).
+# The umbrella's platform/gateway/mcp/sandbox namespaces stay inject=enabled and
+# are meshed by this control plane's cluster-scoped webhook.
 LINKERD_VERSION="${LINKERD_VERSION:-1.16.11}"
 # CRDs first — linkerd-control-plane requires the linkerd.io CRDs to exist.
 # Same manifest the umbrella ships in chart/crds/; kubectl apply is idempotent
 # so the umbrella's later CRD step is a no-op.
 kubectl apply -f chart/crds/linkerd-crds.yaml
 kubectl get ns linkerd >/dev/null 2>&1 || kubectl create namespace linkerd
+kubectl label namespace linkerd \
+  config.linkerd.io/admission-webhooks=disabled --overwrite >/dev/null
 # Scoped preflight: clear ONLY a stuck linkerd-control-plane release in the
 # linkerd ns (demo-owned; same safety rationale as the ai-security preflight).
 lstatus=$(helm -n linkerd status linkerd-control-plane -o json 2>/dev/null \
@@ -200,6 +202,17 @@ lstatus=$(helm -n linkerd status linkerd-control-plane -o json 2>/dev/null \
 if [ -n "$lstatus" ] && [ "$lstatus" != "deployed" ]; then
   echo "    linkerd-control-plane status=$lstatus — uninstalling (scoped)"
   helm uninstall linkerd-control-plane -n linkerd --wait --timeout 120s 2>/dev/null || true
+fi
+# A leftover cluster-scoped Linkerd webhook from an earlier failed attempt
+# keeps a live injector mutating the fresh control-plane pods (the cause of the
+# persistent Init:0/1 / PostStartHookError loop). When we are about to (re)
+# install (no healthy release present), delete ONLY these exact, uniquely
+# Linkerd-named cluster resources so the reinstall recreates them clean.
+if [ -z "$lstatus" ] || [ "$lstatus" != "deployed" ]; then
+  kubectl delete mutatingwebhookconfiguration linkerd-proxy-injector-webhook-config \
+    --ignore-not-found 2>/dev/null || true
+  kubectl delete validatingwebhookconfiguration linkerd-sp-validator-webhook-config \
+    --ignore-not-found 2>/dev/null || true
 fi
 if ! helm_wait linkerd-control-plane linkerd/linkerd-control-plane linkerd \
      --version "$LINKERD_VERSION" -f chart/linkerd-values.yaml; then
