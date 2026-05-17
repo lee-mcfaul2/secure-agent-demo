@@ -71,6 +71,34 @@ diagnose() {
   echo "    full helm output: $HELM_LOG"
 }
 
+# helm_wait <release> <chart> <namespace> [extra helm args...]
+# Runs `helm upgrade --install --wait` in the background while streaming live
+# pod snapshots; on failure dumps per-pod diagnostics. Returns helm's rc so the
+# caller decides whether to abort. Used by every blocking install step.
+helm_wait() {
+  local rel="$1" chart="$2" ns="$3"; shift 3
+  echo "    helm: $rel -> ns/$ns (timeout $HELM_TIMEOUT); live status every ${WATCH_INTERVAL}s"
+  echo "    raw helm output -> $HELM_LOG (tail -f it in another pane)"
+  helm upgrade --install "$rel" "$chart" --namespace "$ns" \
+    --wait --timeout "$HELM_TIMEOUT" ${HELM_DEBUG:+--debug} "$@" \
+    >"$HELM_LOG" 2>&1 &
+  local pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    snapshot
+    sleep "$WATCH_INTERVAL"
+  done
+  set +e
+  wait "$pid"; local rc=$?
+  set -e
+  echo "    ---- helm log (tail 25) ----"
+  tail -n 25 "$HELM_LOG" | sed 's/^/    /'
+  if [ "$rc" -ne 0 ]; then
+    snapshot
+    diagnose
+  fi
+  return "$rc"
+}
+
 # HTTP Helm repos the umbrella resolves against. `helm dependency update`
 # errors with "no repository definition for ..." unless these are
 # registered first — this is the step the README was missing.
@@ -150,21 +178,21 @@ if [ -n "$status" ] && [ "$status" != "deployed" ]; then
 fi
 
 echo "==> 5. Linkerd control plane (separate release; namespace: linkerd)"
-# A namespace cannot both host the Linkerd control plane (which requires the
-# proxy-injector webhook to SKIP it) and auto-inject workloads. So Linkerd is
-# its own release in a dedicated `linkerd` namespace that is NEVER labelled
-# linkerd.io/inject=enabled and HAS admission-webhooks=disabled. The umbrella's
-# platform/gateway/mcp/sandbox namespaces are then meshed by this control
-# plane's (cluster-scoped) webhook.
+# The original wedge: the Linkerd control plane shared the `platform`
+# namespace, which was labelled linkerd.io/inject=enabled, so the proxy
+# injector double-injected the control-plane pods (Init hang / CrashLoop).
+# Fix: a DEDICATED `linkerd` namespace that is NEVER labelled
+# linkerd.io/inject=enabled. We deliberately do NOT set admission-webhooks
+# =disabled — the standard Linkerd Helm path needs the webhook to mesh the
+# control plane, and it self-bootstraps (webhook failurePolicy=Ignore).
+# The umbrella's platform/gateway/mcp/sandbox namespaces (still inject
+# =enabled) are meshed by this control plane's cluster-scoped webhook.
 LINKERD_VERSION="${LINKERD_VERSION:-1.16.11}"
 # CRDs first — linkerd-control-plane requires the linkerd.io CRDs to exist.
 # Same manifest the umbrella ships in chart/crds/; kubectl apply is idempotent
 # so the umbrella's later CRD step is a no-op.
 kubectl apply -f chart/crds/linkerd-crds.yaml
 kubectl get ns linkerd >/dev/null 2>&1 || kubectl create namespace linkerd
-kubectl label namespace linkerd \
-  config.linkerd.io/admission-webhooks=disabled \
-  linkerd.io/is-control-plane=true --overwrite >/dev/null
 # Scoped preflight: clear ONLY a stuck linkerd-control-plane release in the
 # linkerd ns (demo-owned; same safety rationale as the ai-security preflight).
 lstatus=$(helm -n linkerd status linkerd-control-plane -o json 2>/dev/null \
@@ -173,38 +201,17 @@ if [ -n "$lstatus" ] && [ "$lstatus" != "deployed" ]; then
   echo "    linkerd-control-plane status=$lstatus — uninstalling (scoped)"
   helm uninstall linkerd-control-plane -n linkerd --wait --timeout 120s 2>/dev/null || true
 fi
-helm upgrade --install linkerd-control-plane linkerd/linkerd-control-plane \
-  --version "$LINKERD_VERSION" --namespace linkerd \
-  -f chart/linkerd-values.yaml --wait --timeout "$HELM_TIMEOUT" ${HELM_DEBUG:+--debug}
+if ! helm_wait linkerd-control-plane linkerd/linkerd-control-plane linkerd \
+     --version "$LINKERD_VERSION" -f chart/linkerd-values.yaml; then
+  echo; echo "==> bootstrap FAILED at step 5 (Linkerd control plane)"
+  exit 1
+fi
 echo "    linkerd control plane ready (ns: linkerd, v$LINKERD_VERSION)"
 
-echo "==> 6. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE} (timeout ${HELM_TIMEOUT})"
-echo "    helm output -> $HELM_LOG ; live pod status every ${WATCH_INTERVAL}s below"
-echo "    (tail -f $HELM_LOG in another pane for raw helm progress)"
-helm upgrade --install "$RELEASE" ./chart \
-  --namespace "$NAMESPACE" \
-  -f "$VALUES" --wait --timeout "$HELM_TIMEOUT" ${HELM_DEBUG:+--debug} \
-  >"$HELM_LOG" 2>&1 &
-helm_pid=$!
-
-while kill -0 "$helm_pid" 2>/dev/null; do
-  snapshot
-  sleep "$WATCH_INTERVAL"
-done
-set +e
-wait "$helm_pid"
-helm_rc=$?
-set -e
-
-echo "    ---- helm log (tail 25) ----"
-tail -n 25 "$HELM_LOG" | sed 's/^/    /'
-
-if [ "$helm_rc" -ne 0 ]; then
-  snapshot
-  diagnose
-  echo
-  echo "==> bootstrap FAILED (helm rc=$helm_rc)"
-  exit "$helm_rc"
+echo "==> 6. ai-security umbrella -> namespace ${NAMESPACE}"
+if ! helm_wait "$RELEASE" ./chart "$NAMESPACE" -f "$VALUES"; then
+  echo; echo "==> bootstrap FAILED at step 6 (umbrella, ${RELEASE})"
+  exit 1
 fi
 
 echo
