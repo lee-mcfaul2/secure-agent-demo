@@ -16,7 +16,7 @@ set -euo pipefail
 #   ./scripts/bootstrap.sh                 # add repos, fetch deps, install
 #   SKIP_INSTALL=1 ./scripts/bootstrap.sh  # only add repos + fetch deps
 #
-# Override the release/namespace via env: RELEASE, NAMESPACE, VALUES.
+# Override the release/namespace via env: RELEASE, NAMESPACE, VALUES, HELM_TIMEOUT.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -24,6 +24,7 @@ cd "$REPO_ROOT"
 RELEASE="${RELEASE:-ai-security}"
 NAMESPACE="${NAMESPACE:-platform}"
 VALUES="${VALUES:-chart/values-demo.yaml}"
+HELM_TIMEOUT="${HELM_TIMEOUT:-20m}"
 
 # HTTP Helm repos the umbrella resolves against. `helm dependency update`
 # errors with "no repository definition for ..." unless these are
@@ -106,7 +107,7 @@ fi
 echo "==> 5. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE}"
 helm upgrade --install "$RELEASE" ./chart \
   --namespace "$NAMESPACE" \
-  -f "$VALUES" --wait
+  -f "$VALUES" --wait --timeout "$HELM_TIMEOUT"
 
 echo
 echo "==> bootstrap PASS — components are up. Reach them with:"
