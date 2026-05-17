@@ -15,10 +15,13 @@ dependencies:
   # works: the CRDs exist before the platform subcharts' custom resources
   # (AuthorizationPolicy, Server, ClusterSPIFFEID, …) are validated. No
   # out-of-band kubectl step, no Makefile required.
-  - name: linkerd-control-plane
-    version: "1.16.11"
-    repository: https://helm.linkerd.io/stable
-    condition: linkerd-control-plane.enabled
+  #
+  # linkerd-control-plane is intentionally NOT a dependency: a namespace cannot
+  # both host the Linkerd control plane (needs admission-webhooks disabled) and
+  # auto-inject workloads. scripts/bootstrap.sh installs it as its own Helm
+  # release (linkerd/linkerd-control-plane 1.16.11) into a dedicated `linkerd`
+  # namespace BEFORE this umbrella; the umbrella's meshed namespaces are then
+  # injected by that control plane's webhook.
   - name: spire
     version: "0.21.x"
     repository: https://spiffe.github.io/helm-charts-hardened/

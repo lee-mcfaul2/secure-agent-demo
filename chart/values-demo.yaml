@@ -4,53 +4,8 @@
 # Toggles for each subchart (matches the conditions in Chart.yaml).
 # Linkerd + SPIRE CRDs are shipped in chart/crds/ (Helm installs them before
 # templates) — they are not subcharts, so there are no crds toggles here.
-# ============================================================================
-# ☢️  DEMO-ONLY LINKERD CA — committed private keys, on purpose. ☢️
-# The trust anchor + issuer below come from chart/demo-ca/ (see its README).
-# Committing a mesh CA private key is a severe anti-pattern; it exists ONLY to
-# make `make demo` a single command on a throwaway local KIND cluster. Never
-# reuse this anywhere real. In production, Linkerd's issuer is rotated by
-# cert-manager and the trust anchor lives offline in an HSM/KMS.
-# ============================================================================
-linkerd-control-plane:
-  enabled: true
-  identityTrustAnchorsPEM: |
-    -----BEGIN CERTIFICATE-----
-    MIIBsDCCAVWgAwIBAgIUYUf5qIBVFox6MOo/WFSmO9qP8GUwCgYIKoZIzj0EAwIw
-    JTEjMCEGA1UEAwwacm9vdC5saW5rZXJkLmNsdXN0ZXIubG9jYWwwHhcNMjYwNTE1
-    MjEwNzE1WhcNMzYwNTEyMjEwNzE1WjAlMSMwIQYDVQQDDBpyb290LmxpbmtlcmQu
-    Y2x1c3Rlci5sb2NhbDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABPqM3XIKewoK
-    nqCio94MbLRdNOgb8jHmt11QJIj1A/FbZJJ5/+NMlxvDjxtJQ4XhniPKvXDG6Cuo
-    8QY0TZ/HrzKjYzBhMB0GA1UdDgQWBBRLb/G5cOiLAhADDHi+Od8+3Nm46TAfBgNV
-    HSMEGDAWgBRLb/G5cOiLAhADDHi+Od8+3Nm46TAPBgNVHRMBAf8EBTADAQH/MA4G
-    A1UdDwEB/wQEAwIBBjAKBggqhkjOPQQDAgNJADBGAiEA3oQF5PL6Os5br3fqEQXH
-    H/skFAoAuyNPcFzE9dB2xEcCIQDu6OF2a0StzpHak+gCUJUdm7KH/qwlR2ENt8CJ
-    kEcSRA==
-    -----END CERTIFICATE-----
-  identity:
-    issuer:
-      scheme: manual
-      tls:
-        # ☢️ DEMO-ONLY committed issuer cert + PRIVATE KEY — see chart/demo-ca/README.md
-        crtPEM: |
-          -----BEGIN CERTIFICATE-----
-          MIIB1zCCAX2gAwIBAgIUZtaRPfaJKk1lsgQHYSX7QMQXU88wCgYIKoZIzj0EAwIw
-          JTEjMCEGA1UEAwwacm9vdC5saW5rZXJkLmNsdXN0ZXIubG9jYWwwHhcNMjYwNTE1
-          MjEwNzE1WhcNMzYwNTEyMjEwNzE1WjApMScwJQYDVQQDDB5pZGVudGl0eS5saW5r
-          ZXJkLmNsdXN0ZXIubG9jYWwwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATwjWau
-          oH2pqMyDAVo16EdgaCbwHA3M0DgpVrJ2XA6QsHAUdDqtscGU8gUvBUEySITQ9i+e
-          4PU6ehgS6nbxSPVPo4GGMIGDMBIGA1UdEwEB/wQIMAYBAf8CAQAwDgYDVR0PAQH/
-          BAQDAgEGMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAdBgNVHQ4EFgQU
-          iAPNcj1bXnwN1hEeCtNNSah0QGAwHwYDVR0jBBgwFoAUS2/xuXDoiwIQAwx4vjnf
-          PtzZuOkwCgYIKoZIzj0EAwIDSAAwRQIhANibyaNv/8SKjyZq1rqAjMlWYJTViFsB
-          eHY8tyC2qbWnAiADU6NjSGR3oawl/IB4W67WaE0gfmDr4TVQ8rg6OevpKQ==
-          -----END CERTIFICATE-----
-        keyPEM: |
-          -----BEGIN EC PRIVATE KEY-----
-          MHcCAQEEIL3ZCBWGsXH+8iLWX3tS0ctMiOGpts2IPh2KKGE9W41zoAoGCCqGSM49
-          AwEHoUQDQgAE8I1mrqB9qajMgwFaNehHYGgm8BwNzNA4KVaydlwOkLBwFHQ6rbHB
-          lPIFLwVBMkiE0PYvnuD1OnoYEup28Uj1Tw==
-          -----END EC PRIVATE KEY-----
+# Linkerd control plane is NOT here: it is a SEPARATE Helm release in its own
+# `linkerd` namespace (see scripts/bootstrap.sh + chart/linkerd-values.yaml).
 spire:                  { enabled: true }
 
 traffic-gen:

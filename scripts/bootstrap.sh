@@ -3,11 +3,12 @@ set -euo pipefail
 
 # bootstrap.sh — turn a bare clone of this repo into a running demo.
 #
-# The umbrella chart pulls 13 subcharts: 5 infra charts from public HTTP Helm
-# repos (linkerd, spiffe, prometheus-community, dex, bitnami) and 8 local
+# The umbrella chart pulls 12 subcharts: 4 infra charts from public HTTP Helm
+# repos (spiffe, prometheus-community, dex, bitnami) and 8 local
 # file://./charts-local/* charts (the 5 patched platform components plus
 # demo-ui, local-llm, and traffic-gen). No subcharts are pulled from any
-# remote container registry.
+# remote container registry. The Linkerd control plane is NOT in the umbrella —
+# it is installed as its own release in the `linkerd` namespace (step 5).
 # The .tgz archives are deliberately gitignored (chart/charts/*.tgz), so a
 # fresh clone has nothing under chart/charts/. This script registers the HTTP
 # repos that dependency resolution needs, fetches every dependency, and installs.
@@ -27,7 +28,7 @@ VALUES="${VALUES:-chart/values-demo.yaml}"
 HELM_TIMEOUT="${HELM_TIMEOUT:-20m}"
 WATCH_INTERVAL="${WATCH_INTERVAL:-15}"     # secs between live pod snapshots
 HELM_LOG="${HELM_LOG:-/tmp/ai-security-helm.log}"
-NS_ALL=(platform gateway mcp sandbox)
+NS_ALL=(linkerd platform gateway mcp sandbox)
 
 # Live pod table across all four demo namespaces (read-only; shared-cluster safe).
 snapshot() {
@@ -90,7 +91,7 @@ done
 helm repo update >/dev/null
 echo "    helm repo update OK"
 
-echo "==> 2. helm dependency update (resolves + fetches all 13 subcharts)"
+echo "==> 2. helm dependency update (resolves + fetches all 12 subcharts)"
 # `update` not `build`: all platform charts (plus demo-ui, local-llm, and
 # traffic-gen) are local file://./charts-local/* overrides, so Chart.lock is
 # regenerated here rather than committed. This also recreates chart/charts/
@@ -148,7 +149,36 @@ if [ -n "$status" ] && [ "$status" != "deployed" ]; then
     --ignore-not-found 2>/dev/null || true
 fi
 
-echo "==> 5. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE} (timeout ${HELM_TIMEOUT})"
+echo "==> 5. Linkerd control plane (separate release; namespace: linkerd)"
+# A namespace cannot both host the Linkerd control plane (which requires the
+# proxy-injector webhook to SKIP it) and auto-inject workloads. So Linkerd is
+# its own release in a dedicated `linkerd` namespace that is NEVER labelled
+# linkerd.io/inject=enabled and HAS admission-webhooks=disabled. The umbrella's
+# platform/gateway/mcp/sandbox namespaces are then meshed by this control
+# plane's (cluster-scoped) webhook.
+LINKERD_VERSION="${LINKERD_VERSION:-1.16.11}"
+# CRDs first — linkerd-control-plane requires the linkerd.io CRDs to exist.
+# Same manifest the umbrella ships in chart/crds/; kubectl apply is idempotent
+# so the umbrella's later CRD step is a no-op.
+kubectl apply -f chart/crds/linkerd-crds.yaml
+kubectl get ns linkerd >/dev/null 2>&1 || kubectl create namespace linkerd
+kubectl label namespace linkerd \
+  config.linkerd.io/admission-webhooks=disabled \
+  linkerd.io/is-control-plane=true --overwrite >/dev/null
+# Scoped preflight: clear ONLY a stuck linkerd-control-plane release in the
+# linkerd ns (demo-owned; same safety rationale as the ai-security preflight).
+lstatus=$(helm -n linkerd status linkerd-control-plane -o json 2>/dev/null \
+  | jq -r '.info.status // empty' 2>/dev/null || true)
+if [ -n "$lstatus" ] && [ "$lstatus" != "deployed" ]; then
+  echo "    linkerd-control-plane status=$lstatus — uninstalling (scoped)"
+  helm uninstall linkerd-control-plane -n linkerd --wait --timeout 120s 2>/dev/null || true
+fi
+helm upgrade --install linkerd-control-plane linkerd/linkerd-control-plane \
+  --version "$LINKERD_VERSION" --namespace linkerd \
+  -f chart/linkerd-values.yaml --wait --timeout "$HELM_TIMEOUT" ${HELM_DEBUG:+--debug}
+echo "    linkerd control plane ready (ns: linkerd, v$LINKERD_VERSION)"
+
+echo "==> 6. helm upgrade --install ${RELEASE} -> namespace ${NAMESPACE} (timeout ${HELM_TIMEOUT})"
 echo "    helm output -> $HELM_LOG ; live pod status every ${WATCH_INTERVAL}s below"
 echo "    (tail -f $HELM_LOG in another pane for raw helm progress)"
 helm upgrade --install "$RELEASE" ./chart \
