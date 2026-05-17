@@ -65,6 +65,14 @@ traffic-gen:
 
 customer-db:
   enabled: true
+  # ☢️ Bitnami deleted versioned community tags from docker.io/bitnami/* in
+  # 2025; the unchanged images live under docker.io/bitnamilegacy/*. Pin the
+  # legacy mirror so a turnkey demo still pulls. (Production: use a supported
+  # registry / your own mirror.)
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/postgresql
+    tag: 17.6.0-debian-12-r4
   auth:
     username: customers
     password: customers-demo-pw
