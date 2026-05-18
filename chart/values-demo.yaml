@@ -44,9 +44,21 @@ customer-db:
     password: customers-demo-pw
     database: customers
   primary:
+    # Throwaway demo DB: no persistence so every bootstrap starts from a
+    # clean cluster. This also clears the migrate "Dirty database version 1"
+    # state that a half-applied migration leaves on a persisted PVC, and
+    # guarantees the initdb script below re-runs each install.
     persistence:
-      enabled: true
-      size: 1Gi
+      enabled: false
+    initdb:
+      # Runs once (fresh data dir) as the postgres superuser. The migration
+      # Job connects as `customers` and needs CREATE ROLE for
+      # `CREATE ROLE agent_sql_mcp_runtime` in 0001_init.up.sql; the bitnami
+      # app user lacks it by default. Grant CREATEROLE (sufficient — no
+      # SUPERUSER needed; table GRANTs work because customers owns them).
+      scripts:
+        00-grant-createrole.sql: |
+          ALTER ROLE customers WITH CREATEROLE;
     service:
       type: ClusterIP
 
