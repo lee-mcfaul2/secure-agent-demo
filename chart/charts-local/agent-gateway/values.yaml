@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/lee-mcfaul2/agent-gateway
-  tag: 0.1.0
+  tag: 0.1.1   # v0.1.1: local-path bundle demo mode (was 0.1.0)
   pullPolicy: IfNotPresent
 
 replicas: 2
