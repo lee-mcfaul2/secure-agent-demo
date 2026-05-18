@@ -297,6 +297,20 @@ kube-prometheus-stack:
   grafana:
     enabled: true
     adminPassword: "prom-operator"
+    # On the loaded 4-core node grafana's first boot is slow (SQLite
+    # "database is locked" retries, ~11s plugin install, dashboard
+    # provisioning); default probes hit connection-refused and flap
+    # helm --wait. Widen so it isn't killed before it binds :3000.
+    readinessProbe:
+      httpGet: { path: /api/health, port: 3000 }
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      failureThreshold: 30
+    livenessProbe:
+      httpGet: { path: /api/health, port: 3000 }
+      initialDelaySeconds: 60
+      periodSeconds: 15
+      failureThreshold: 30
     service:
       type: NodePort
       nodePort: 30090
