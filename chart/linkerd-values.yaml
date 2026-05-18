@@ -25,7 +25,12 @@ identityTrustAnchorsPEM: |
   -----END CERTIFICATE-----
 identity:
   issuer:
-    scheme: manual
+    # linkerd.io/tls (NOT "manual"): "manual" means the operator supplies the
+    # linkerd-identity-issuer Secret out-of-band (CLI / cert-manager path) and
+    # the chart renders NO Secret -> identity pod stuck on a missing volume.
+    # "linkerd.io/tls" makes the chart create the Secret from crtPEM/keyPEM
+    # below, which is the correct Helm-managed-issuer scheme for a baked demo CA.
+    scheme: linkerd.io/tls
     tls:
       # ☢️ DEMO-ONLY committed issuer cert + PRIVATE KEY — see chart/demo-ca/README.md
       crtPEM: |
