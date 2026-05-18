@@ -196,6 +196,20 @@ LINKERD_CRDS_VERSION="${LINKERD_CRDS_VERSION:-1.6.1}"
 kubectl get ns linkerd >/dev/null 2>&1 || kubectl create namespace linkerd
 kubectl label namespace linkerd \
   config.linkerd.io/admission-webhooks=disabled --overwrite >/dev/null
+# Earlier iterations created the linkerd CRDs via `kubectl apply` (no Helm
+# ownership metadata). The linkerd-crds chart then refuses to adopt them
+# ("invalid ownership metadata"). Patch Helm ownership onto the existing
+# *.linkerd.io CRDs so the chart adopts them — non-destructive (no CRD
+# deletion, no CR data loss). Scoped to the linkerd.io API group only: no
+# other tenant on this shared cluster owns those (Gateway API CRDs are NOT
+# touched — the chart creates the genuinely-absent one fresh).
+for crd in $(kubectl get crd -o name 2>/dev/null | grep -E '\.linkerd\.io$'); do
+  kubectl label "$crd" app.kubernetes.io/managed-by=Helm \
+    --overwrite >/dev/null 2>&1 || true
+  kubectl annotate "$crd" \
+    meta.helm.sh/release-name=linkerd-crds \
+    meta.helm.sh/release-namespace=linkerd --overwrite >/dev/null 2>&1 || true
+done
 # CRDs first via the OFFICIAL linkerd-crds chart (standard Linkerd Helm path),
 # NOT the hand-extracted chart/crds/linkerd-crds.yaml — that copy was missing
 # httproutes.gateway.networking.k8s.io, so the policy controller 404-looped
