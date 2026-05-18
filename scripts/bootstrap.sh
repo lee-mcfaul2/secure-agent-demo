@@ -192,7 +192,19 @@ echo "==> 5. Linkerd control plane (separate release; namespace: linkerd)"
 # The umbrella's platform/gateway/mcp/sandbox namespaces stay inject=enabled and
 # are meshed by this control plane's cluster-scoped webhook.
 LINKERD_VERSION="${LINKERD_VERSION:-1.16.11}"
-LINKERD_CRDS_VERSION="${LINKERD_CRDS_VERSION:-1.6.1}"
+# Pair linkerd-crds to linkerd-control-plane by matching appVersion (the
+# Linkerd release, e.g. stable-2.14.10). A mismatched crds chart serves the
+# wrong HTTPRoute API version -> the policy controller 404-loops on
+# httproutes.policy.linkerd.io and linkerd-destination never reaches 4/4.
+# Override LINKERD_CRDS_VERSION to skip auto-resolution.
+if [ -z "${LINKERD_CRDS_VERSION:-}" ]; then
+  _lap=$(helm show chart linkerd/linkerd-control-plane --version "$LINKERD_VERSION" 2>/dev/null \
+    | awk -F'[: ]+' '/^appVersion:/{print $2}')
+  LINKERD_CRDS_VERSION=$(helm search repo linkerd/linkerd-crds --versions -o json 2>/dev/null \
+    | jq -r --arg a "$_lap" 'map(select(.app_version==$a))|.[0].version // empty' 2>/dev/null)
+  LINKERD_CRDS_VERSION="${LINKERD_CRDS_VERSION:-1.8.0}"
+  echo "    linkerd-crds resolved to $LINKERD_CRDS_VERSION (control-plane appVersion=${_lap:-unknown})"
+fi
 kubectl get ns linkerd >/dev/null 2>&1 || kubectl create namespace linkerd
 kubectl label namespace linkerd \
   config.linkerd.io/admission-webhooks=disabled --overwrite >/dev/null
@@ -216,6 +228,12 @@ done
 # and linkerd-destination never reached 4/4. The chart ships the complete,
 # version-matched CRD set incl. the Gateway API CRDs. Idempotent; the
 # umbrella's own crds/ apply later becomes a no-op.
+cstatus=$(helm -n linkerd status linkerd-crds -o json 2>/dev/null \
+  | jq -r '.info.status // empty' 2>/dev/null || true)
+if [ -n "$cstatus" ] && [ "$cstatus" != "deployed" ]; then
+  echo "    linkerd-crds status=$cstatus — uninstalling (scoped)"
+  helm uninstall linkerd-crds -n linkerd --wait --timeout 120s 2>/dev/null || true
+fi
 helm upgrade --install linkerd-crds linkerd/linkerd-crds \
   --version "$LINKERD_CRDS_VERSION" --namespace linkerd \
   --wait --timeout 120s ${HELM_DEBUG:+--debug}
