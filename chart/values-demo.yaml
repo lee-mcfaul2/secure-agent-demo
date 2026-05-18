@@ -307,19 +307,33 @@ kube-prometheus-stack:
     service:
       type: ClusterIP
   grafana:
-    # PHASE-1: DISABLED. grafana is the only pod that won't converge on this
-    # contended 4-core node — its first-boot SQLite migration + plugin
-    # install outlasts the probes, and the bundled grafana chart (v8.5.12)
-    # has NO startupProbe support, so it can't be gated cleanly. It is NOT
-    # part of the core security path (gateway->llm-guard->tokenizer->mcp);
-    # dashboards are a Phase-3 deliverable. Prometheus/kube-state-metrics/
-    # node-exporter stay enabled and collect the security metrics.
-    # PHASE-3 re-enable: set enabled: true and, because there is no
-    # startupProbe, make livenessProbe lenient enough to survive a slow
-    # first boot, e.g. livenessProbe.initialDelaySeconds: 600,
-    # failureThreshold: 30; keep readinessProbe for helm --wait.
-    enabled: false
+    enabled: true
     adminPassword: "prom-operator"
+    # The bundled grafana chart (v8.5.12) has NO startupProbe, so on this
+    # contended node the livenessProbe was killing grafana mid-first-boot
+    # (long SQLite migration suite) -> restart loop that never converges.
+    # Make livenessProbe act as the missing startup gate: it does not even
+    # begin checking for 10min, and won't kill until ~15min of uninterrupted
+    # boot (600 + 10*30s) — grafana's own logs show it boots well within
+    # that, it just must not be interrupted. readinessProbe is lenient so
+    # `helm --wait` keeps waiting (it never restarts the pod) until grafana
+    # actually serves /api/health; HELM_TIMEOUT (20m) covers it.
+    livenessProbe:
+      httpGet: { path: /api/health, port: 3000 }
+      initialDelaySeconds: 600
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 10
+    readinessProbe:
+      httpGet: { path: /api/health, port: 3000 }
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 120
+    # No extra plugin installs (the default pulled grafana-lokiexplore-app,
+    # an unneeded network+install step under contention). Demo dashboards
+    # don't need it.
+    plugins: []
     service:
       type: NodePort
       nodePort: 30090
