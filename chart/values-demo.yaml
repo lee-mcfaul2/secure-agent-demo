@@ -41,6 +41,10 @@ customer-db:
 
 dex:
   enabled: true
+  # Service name must be `dex` (default would be <release>-dex = ai-security-dex)
+  # so the hardcoded http://dex.platform.svc.cluster.local:5556/dex issuer/JWKS
+  # URLs in the gateway/mcp configs resolve.
+  fullnameOverride: dex
   ingress:
     enabled: false
   service:
@@ -180,7 +184,7 @@ agent-gateway:
   bundle:
     demoMode: true
     demoPvcName: prompt-bundle
-    demoPvcNamespace: platform
+    demoPvcNamespace: gateway
     demoMountPath: /var/lib/prompts
   # ☢️ DEMO-ONLY: chart creates the audit DB Secret from this DSN so the
   # gateway's unconditional secretKeyRef resolves without an external Secret.

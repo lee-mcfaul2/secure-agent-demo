@@ -24,8 +24,11 @@ cd "$REPO_ROOT"
 
 RELEASE="${RELEASE:-ai-security}"
 NAMESPACE="${NAMESPACE:-platform}"
+# prompt-bundle PVC + bundle-fetcher hook live in the gateway ns (their only
+# consumer, agent-gateway, runs there; PVCs can't be mounted cross-namespace).
+BUNDLE_NS="${BUNDLE_NS:-gateway}"
 VALUES="${VALUES:-chart/values-demo.yaml}"
-HELM_TIMEOUT="${HELM_TIMEOUT:-20m}"
+HELM_TIMEOUT="${HELM_TIMEOUT:-7m}"
 WATCH_INTERVAL="${WATCH_INTERVAL:-15}"     # secs between live pod snapshots
 HELM_LOG="${HELM_LOG:-/tmp/ai-security-helm.log}"
 NS_ALL=(linkerd platform gateway mcp sandbox)
@@ -167,12 +170,12 @@ if [ -n "$status" ] && [ "$status" != "deployed" ]; then
   helm uninstall "$RELEASE" -n "$NAMESPACE" --wait --timeout 120s 2>/dev/null || true
 fi
 # leftover Succeeded hook pod pins the hook PVC — delete by exact label+phase only
-kubectl -n "$NAMESPACE" delete pod -l job-name=bundle-fetcher \
+kubectl -n "$BUNDLE_NS" delete pod -l job-name=bundle-fetcher \
   --field-selector=status.phase=Succeeded --ignore-not-found 2>/dev/null || true
 # orphaned hook PVC (NOT chart-managed): delete this ONE named PVC; clear finalizer if it hangs
-if kubectl -n "$NAMESPACE" get pvc prompt-bundle >/dev/null 2>&1; then
-  kubectl -n "$NAMESPACE" delete pvc prompt-bundle --timeout=60s 2>/dev/null \
-    || kubectl -n "$NAMESPACE" patch pvc prompt-bundle --type=merge \
+if kubectl -n "$BUNDLE_NS" get pvc prompt-bundle >/dev/null 2>&1; then
+  kubectl -n "$BUNDLE_NS" delete pvc prompt-bundle --timeout=60s 2>/dev/null \
+    || kubectl -n "$BUNDLE_NS" patch pvc prompt-bundle --type=merge \
          -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
 fi
 # stale release records, scoped to THIS release's helm secrets only

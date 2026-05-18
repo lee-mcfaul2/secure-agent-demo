@@ -33,6 +33,11 @@ spec:
               containerPort: 8080
               protocol: TCP
           env:
+            # The image installs only deps into /opt/venv and COPYs the
+            # package to /app/src without pip-installing it, so `python -m
+            # llm_guard_svc` needs src on PYTHONPATH.
+            - name: PYTHONPATH
+              value: /app/src
             - name: LLM_GUARD_PORT
               value: "8080"
             - name: LLM_GUARD_PII_TYPES_PATH
