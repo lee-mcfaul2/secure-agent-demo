@@ -346,12 +346,20 @@ kube-prometheus-stack:
       datasources:
         enabled: true
     grafana.ini:
+      database:
+        # WAL mode is the canonical cure for grafana's SQLite
+        # "database is locked" stalls (concurrent readers no longer block
+        # the writer) — the actual reason first boot wouldn't converge.
+        wal: true
       auth.anonymous:
         enabled: true
         org_role: Viewer
+    # SQLite on node-local emptyDir instead of the provisioned PVC: the PVC's
+    # locking/fsync under contention on this node is what serialized grafana
+    # into the lock-retry stall. No data loss — dashboards/datasources are
+    # re-provisioned from ConfigMaps by the sidecars on every boot.
     persistence:
-      enabled: true
-      size: 1Gi
+      enabled: false
   alertmanager:
     # Not needed for the demo (no alert consumers); a StatefulSet+PVC+probes
     # is pure load on the shared 4-core node and flaps helm --wait.
