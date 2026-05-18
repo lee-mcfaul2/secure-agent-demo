@@ -11,7 +11,10 @@ metadata:
     # running post-install hooks, so by here Postgres is up.
     helm.sh/hook: post-install,post-upgrade
     helm.sh/hook-weight: "0"
-    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    # hook-failed too: without it a FAILED migrate Job is never cleaned
+    # (helm uninstall does not remove hook resources) and lingers as a
+    # cross-run "ghost" that pollutes diagnostics.
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded,hook-failed
 spec:
   backoffLimit: 2
   template:

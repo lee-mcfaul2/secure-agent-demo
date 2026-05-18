@@ -28,7 +28,11 @@ NAMESPACE="${NAMESPACE:-platform}"
 # consumer, agent-gateway, runs there; PVCs can't be mounted cross-namespace).
 BUNDLE_NS="${BUNDLE_NS:-gateway}"
 VALUES="${VALUES:-chart/values-demo.yaml}"
-HELM_TIMEOUT="${HELM_TIMEOUT:-7m}"
+# Cold start on this contended single node is genuinely slow: llm-guard's
+# startupProbe alone allows ~15m for ML model load, plus bitnami postgres
+# first-init and grafana SQLite migrations. `helm --wait` must outlast the
+# slowest pod, so default 20m (override with HELM_TIMEOUT=...).
+HELM_TIMEOUT="${HELM_TIMEOUT:-20m}"
 WATCH_INTERVAL="${WATCH_INTERVAL:-15}"     # secs between live pod snapshots
 HELM_LOG="${HELM_LOG:-/tmp/ai-security-helm.log}"
 NS_ALL=(linkerd platform gateway mcp sandbox)
@@ -178,6 +182,12 @@ if kubectl -n "$BUNDLE_NS" get pvc prompt-bundle >/dev/null 2>&1; then
     || kubectl -n "$BUNDLE_NS" patch pvc prompt-bundle --type=merge \
          -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
 fi
+# The agent-sql-mcp-migrate Job is a post-install HOOK. A FAILED hook Job is
+# NOT removed by `helm uninstall` and lingers in the mcp ns across runs (the
+# 33-min "ghost" migrate pods that pollute diagnostics). Delete this ONE
+# named Job (and its pods) by exact name, scoped to the mcp ns.
+kubectl -n mcp delete job agent-sql-mcp-migrate --ignore-not-found \
+  --cascade=foreground --timeout=60s 2>/dev/null || true
 # stale release records, scoped to THIS release's helm secrets only
 if [ -n "$status" ] && [ "$status" != "deployed" ]; then
   kubectl -n "$NAMESPACE" delete secret -l owner=helm,name="$RELEASE" \
