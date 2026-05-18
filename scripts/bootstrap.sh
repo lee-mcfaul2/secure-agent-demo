@@ -286,4 +286,4 @@ echo
 echo "==> bootstrap PASS — components are up. Reach them with:"
 echo "    kubectl -n gateway  port-forward svc/agent-gateway 8080:8080"
 echo "    kubectl -n ${NAMESPACE} port-forward svc/demo-ui       8081:80"
-echo "    kubectl -n ${NAMESPACE} port-forward svc/kps-grafana   3000:80"
+echo "    (grafana is disabled for Phase 1 — re-enabled in Phase 3)"
