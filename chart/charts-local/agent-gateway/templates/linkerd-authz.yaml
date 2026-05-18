@@ -11,3 +11,4 @@ spec:
   requiredAuthenticationRefs:
     - kind: MeshTLSAuthentication
       name: agent-sandbox-only
+      group: policy.linkerd.io

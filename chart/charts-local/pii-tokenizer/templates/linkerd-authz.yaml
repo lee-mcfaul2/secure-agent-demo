@@ -11,3 +11,4 @@ spec:
   requiredAuthenticationRefs:
     - kind: MeshTLSAuthentication
       name: agent-gateway-only
+      group: policy.linkerd.io
