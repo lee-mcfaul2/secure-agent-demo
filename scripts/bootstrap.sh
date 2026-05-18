@@ -37,9 +37,11 @@ snapshot() {
     out=$(kubectl -n "$ns" get pods --no-headers 2>/dev/null) || continue
     [ -z "$out" ] && continue
     echo "    [$ns]"
-    # not-ready (STATUS not Running/Completed) first, then the rest
-    echo "$out" | awk '$3!="Running"&&$3!="Completed"{printf "      ! %-42s %-20s ready=%s restarts=%s\n",$1,$3,$2,$4}'
-    echo "$out" | awk '$3=="Running"||$3=="Completed"{printf "        %-42s %-20s ready=%s\n",$1,$3,$2}'
+    # "bad" = phase not Running/Completed OR a Running pod whose READY column
+    # is a/b with a<b (a container is up but not Ready — exactly what blocks
+    # `helm --wait`). Print bad first, then the rest.
+    echo "$out" | awk 'function bad(){n=split($2,r,"/");return ($3!="Running"&&$3!="Completed")||($3=="Running"&&n==2&&r[1]!=r[2])} bad(){printf "      ! %-42s %-20s ready=%s restarts=%s\n",$1,$3,$2,$4}'
+    echo "$out" | awk 'function bad(){n=split($2,r,"/");return ($3!="Running"&&$3!="Completed")||($3=="Running"&&n==2&&r[1]!=r[2])} !bad(){printf "        %-42s %-20s ready=%s\n",$1,$3,$2}'
   done
 }
 
@@ -49,14 +51,16 @@ diagnose() {
   echo "==> DIAGNOSTICS — helm --wait did not converge; per-pod cause below"
   for ns in "${NS_ALL[@]}"; do
     bad=$(kubectl -n "$ns" get pods --no-headers 2>/dev/null \
-      | awk '$3!="Running"&&$3!="Completed"{print $1}') || true
+      | awk 'function bad(){n=split($2,r,"/");return ($3!="Running"&&$3!="Completed")||($3=="Running"&&n==2&&r[1]!=r[2])} bad(){print $1}') || true
     [ -z "$bad" ] && continue
     echo "==== namespace: $ns ===="
     for p in $bad; do
       echo ">> POD $ns/$p"
       kubectl -n "$ns" describe pod "$p" 2>/dev/null | sed -n '/^Events:/,$p' | tail -15
-      for c in $(kubectl -n "$ns" get pod "$p" \
-                   -o jsonpath='{.spec.initContainers[*].name} {.spec.containers[*].name}' 2>/dev/null); do
+      # Focus on the container(s) actually not Ready; fall back to all.
+      nr=$(kubectl -n "$ns" get pod "$p" -o jsonpath='{range .status.initContainerStatuses[?(@.ready==false)]}{.name}{" "}{end}{range .status.containerStatuses[?(@.ready==false)]}{.name}{" "}{end}' 2>/dev/null)
+      echo "   not-ready containers: ${nr:-<none flagged; dumping all>}"
+      for c in ${nr:-$(kubectl -n "$ns" get pod "$p" -o jsonpath='{.spec.initContainers[*].name} {.spec.containers[*].name}' 2>/dev/null)}; do
         echo "   -- logs: $c (tail 20) --"
         kubectl -n "$ns" logs "$p" -c "$c" --tail=20 2>/dev/null \
           || kubectl -n "$ns" logs "$p" -c "$c" --tail=20 --previous 2>/dev/null \
@@ -188,13 +192,19 @@ echo "==> 5. Linkerd control plane (separate release; namespace: linkerd)"
 # The umbrella's platform/gateway/mcp/sandbox namespaces stay inject=enabled and
 # are meshed by this control plane's cluster-scoped webhook.
 LINKERD_VERSION="${LINKERD_VERSION:-1.16.11}"
-# CRDs first — linkerd-control-plane requires the linkerd.io CRDs to exist.
-# Same manifest the umbrella ships in chart/crds/; kubectl apply is idempotent
-# so the umbrella's later CRD step is a no-op.
-kubectl apply -f chart/crds/linkerd-crds.yaml
+LINKERD_CRDS_VERSION="${LINKERD_CRDS_VERSION:-1.6.1}"
 kubectl get ns linkerd >/dev/null 2>&1 || kubectl create namespace linkerd
 kubectl label namespace linkerd \
   config.linkerd.io/admission-webhooks=disabled --overwrite >/dev/null
+# CRDs first via the OFFICIAL linkerd-crds chart (standard Linkerd Helm path),
+# NOT the hand-extracted chart/crds/linkerd-crds.yaml — that copy was missing
+# httproutes.gateway.networking.k8s.io, so the policy controller 404-looped
+# and linkerd-destination never reached 4/4. The chart ships the complete,
+# version-matched CRD set incl. the Gateway API CRDs. Idempotent; the
+# umbrella's own crds/ apply later becomes a no-op.
+helm upgrade --install linkerd-crds linkerd/linkerd-crds \
+  --version "$LINKERD_CRDS_VERSION" --namespace linkerd \
+  --wait --timeout 120s ${HELM_DEBUG:+--debug}
 # Scoped preflight: clear ONLY a stuck linkerd-control-plane release in the
 # linkerd ns (demo-owned; same safety rationale as the ai-security preflight).
 lstatus=$(helm -n linkerd status linkerd-control-plane -o json 2>/dev/null \
