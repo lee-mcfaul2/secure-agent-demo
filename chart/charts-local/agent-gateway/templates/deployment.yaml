@@ -41,7 +41,7 @@ spec:
             - { name: GATEWAY_LLM_GUARD_TIMEOUT_SECONDS, value: "{{ .Values.llm_guard.timeout_seconds }}" }
             # LLM routing.
             - { name: GATEWAY_DEFAULT_MODEL, value: "{{ .Values.models.default_model }}" }
-            - { name: GATEWAY_ALLOWED_MODELS, value: "{{ .Values.models.allowed_models }}" }
+            - { name: GATEWAY_ALLOWED_MODELS, value: {{ .Values.models.allowed_models | quote }} }
             # Gateway's own MCP-proxy URL.
             - { name: GATEWAY_GATEWAY_MCP_INTERNAL_URL, value: "{{ .Values.gateway_mcp_internal_url }}" }
             {{- if not .Values.bundle.demoMode }}

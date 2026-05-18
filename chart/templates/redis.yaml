@@ -1,0 +1,76 @@
+# Demo-grade Redis for pii-tokenizer state (single/standalone, no auth, DB 0,
+# ephemeral storage). pii-tokenizer connects in `redis.mode: single` to
+# redis.platform.svc.cluster.local:6379 (see values-demo.yaml pii-tokenizer.redis).
+#
+# Pod label `app: redis` is REQUIRED: pii-tokenizer's egress NetworkPolicy
+# (charts-local/pii-tokenizer/templates/networkpolicy.yaml) only permits egress
+# to `podSelector: { matchLabels: { app: redis } }` on TCP/6379 in this namespace.
+#
+# linkerd.io/inject: disabled — the `platform` namespace has mesh auto-injection
+# enabled, but this is a throwaway demo cache with no mTLS requirement. A meshed
+# pii-tokenizer talking to an un-meshed pod is transparently passed through as
+# plain TCP by the Linkerd outbound proxy; no Linkerd Server/AuthorizationPolicy
+# targets redis, so nothing forces mTLS on its inbound. Skipping the sidecar also
+# saves resources on the shared 4-core node.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: platform
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+      annotations:
+        linkerd.io/inject: disabled
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["--save", "", "--appendonly", "no"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          livenessProbe:
+            tcpSocket: { port: 6379 }
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: platform
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      protocol: TCP

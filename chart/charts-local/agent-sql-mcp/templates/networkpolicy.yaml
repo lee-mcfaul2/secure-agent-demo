@@ -8,16 +8,22 @@ spec:
     matchLabels: { app: agent-sql-mcp }
   policyTypes: [Egress]
   egress:
+    # kubernetes.io/metadata.name (the old `name:` label exists on no
+    # namespace). Pod-level app selectors dropped: the bitnami postgres pod is
+    # not labelled `app: postgres` and dex is not `app: keycloak`, so the old
+    # selectors denied DB + JWKS. Namespace+port scope is sufficient for the
+    # demo (Linkerd authz is the real control).
+    # customer-db postgres (platform:5432)
     - to:
-        - namespaceSelector: { matchLabels: { name: platform } }
-          podSelector: { matchLabels: { app: postgres } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: platform } }
       ports:
         - { port: 5432, protocol: TCP }
+    # dex OIDC / JWKS (platform:5556)
     - to:
-        - namespaceSelector: { matchLabels: { name: platform } }
-          podSelector: { matchLabels: { app: keycloak } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: platform } }
       ports:
-        - { port: 8080, protocol: TCP }
+        - { port: 5556, protocol: TCP }
+    # DNS
     - to:
         - namespaceSelector: {}
       ports:

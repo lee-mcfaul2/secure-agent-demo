@@ -6,7 +6,14 @@
 # templates) — they are not subcharts, so there are no crds toggles here.
 # Linkerd control plane is NOT here: it is a SEPARATE Helm release in its own
 # `linkerd` namespace (see scripts/bootstrap.sh + chart/linkerd-values.yaml).
-spire:                  { enabled: true }
+spire:
+  enabled: true
+  # The OIDC discovery provider is the only component that mounts the
+  # csi.spiffe.io volume; it races the CSI DaemonSet registration and the
+  # demo does not use external OIDC federation (mesh identity is Linkerd;
+  # user auth is dex). Disable it to remove the flaky CSI consumer.
+  spiffe-oidc-discovery-provider:
+    enabled: false
 
 traffic-gen:
   enabled: true
@@ -204,11 +211,13 @@ agent-gateway:
         litellm_params:
           model: "ollama_chat/llama3.2:3b"
           api_base: "http://local-llm.platform.svc.cluster.local:11434"
-  # chart expects allowed_models as a comma string (not a YAML list) —
-  # contract map §1
+  # The published gateway image's pydantic-settings JSON-decodes the
+  # `allowed_models` tuple field from its env var, so the value MUST be a JSON
+  # array string (CSV raised SettingsError). Only claude-sonnet-4-6 is a
+  # routable litellm model_name, so that's the sole allowed model.
   models:
     default_model: "claude-sonnet-4-6"
-    allowed_models: "claude-sonnet-4-6,llama3.2"
+    allowed_models: '["claude-sonnet-4-6"]'
   # Shared 4-core node: minimal CPU request (scheduling-only); limit unchanged.
   resources:
     requests: { cpu: "50m",  memory: "512Mi" }
@@ -303,9 +312,9 @@ kube-prometheus-stack:
       enabled: true
       size: 1Gi
   alertmanager:
-    enabled: true
-    alertmanagerSpec:
-      replicas: 1
+    # Not needed for the demo (no alert consumers); a StatefulSet+PVC+probes
+    # is pure load on the shared 4-core node and flaps helm --wait.
+    enabled: false
 
 local-llm:
   enabled: true

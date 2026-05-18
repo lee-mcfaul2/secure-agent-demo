@@ -8,28 +8,44 @@ spec:
     matchLabels: { app: agent-gateway }
   policyTypes: [Egress]
   egress:
+    # Namespace selectors use kubernetes.io/metadata.name (auto-applied by k8s
+    # to every namespace). The previous `name:` label is set on NO namespace,
+    # so these rules matched nothing and silently dropped all cross-service
+    # egress. Pod-level app selectors are intentionally omitted: dex/postgres/
+    # ollama subcharts label pods differently than the old keycloak/postgres
+    # names, and for the demo a namespace+port scope is sufficient (Linkerd
+    # AuthorizationPolicy is the real caller-identity control).
+    # pii-tokenizer (platform:8443)
     - to:
-        - namespaceSelector: { matchLabels: { name: platform } }
-          podSelector: { matchLabels: { app: pii-tokenizer } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: platform } }
       ports:
         - { port: 8443, protocol: TCP }
+    # dex OIDC (platform:5556)
     - to:
-        - namespaceSelector: { matchLabels: { name: mcp } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: platform } }
+      ports:
+        - { port: 5556, protocol: TCP }
+    # local-llm / ollama (platform:11434)
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: platform } }
+      ports:
+        - { port: 11434, protocol: TCP }
+    # agent-sql-mcp (mcp:8443)
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: mcp } }
       ports:
         - { port: 8443, protocol: TCP }
+    # Kubernetes API (sandbox Job launcher) — kube-system:443
     - to:
-        - namespaceSelector: { matchLabels: { name: kube-system } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
       ports:
         - { port: 443, protocol: TCP }
-    - to:
-        - namespaceSelector: { matchLabels: { name: platform } }
-          podSelector: { matchLabels: { app: keycloak } }
-      ports:
-        - { port: 8080, protocol: TCP }
+    # External LLM providers (anthropic/openai) over TLS
     - to:
         - ipBlock: { cidr: 0.0.0.0/0 }
       ports:
         - { port: 443, protocol: TCP }
+    # DNS
     - to:
         - namespaceSelector: {}
       ports:

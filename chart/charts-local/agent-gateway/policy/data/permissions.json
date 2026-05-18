@@ -1,0 +1,6 @@
+{
+  "permissions": {
+    "kb": "kb:read",
+    "audit_db": "audit:read"
+  }
+}

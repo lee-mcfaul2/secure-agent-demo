@@ -69,20 +69,32 @@ spec:
             limits:
               cpu: {{ .Values.resources.limits.cpu }}
               memory: {{ .Values.resources.limits.memory }}
+          # startupProbe gates liveness/readiness entirely until the ML
+          # scanners finish loading. On a shared 4-core node a cold start
+          # (and a possible runtime HuggingFace download if the image
+          # preload fell back to "|| echo WARN") can take many minutes, so
+          # we allow up to ~10 min before declaring the pod failed.
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 90  # 90 * 10s = 900s budget for ML model load on slow shared node
           readinessProbe:
             httpGet:
               path: /readyz
               port: http
-            initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 18  # tolerate 90s of slow model load
+            timeoutSeconds: 3
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /healthz
               port: http
-            initialDelaySeconds: 30
             periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           volumeMounts:
             - name: pii-types
               mountPath: /etc/llm-guard
