@@ -33,6 +33,14 @@ spec:
               containerPort: 8080
               protocol: TCP
           env:
+            # runAsUser:1000 has no /etc/passwd entry, so torch's
+            # getpass.getuser() -> pwd.getpwuid(1000) raises KeyError. Setting
+            # USER (getpass checks env before pwd) and a writable HOME for
+            # torch/HF cache dirs avoids the crash.
+            - name: USER
+              value: llmguard
+            - name: HOME
+              value: /tmp
             # The image installs only deps into /opt/venv and COPYs the
             # package to /app/src without pip-installing it, so `python -m
             # llm_guard_svc` needs src on PYTHONPATH.

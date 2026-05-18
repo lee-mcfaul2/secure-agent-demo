@@ -27,6 +27,10 @@ traffic-gen:
 
 customer-db:
   enabled: true
+  # Service must be `customer-db-postgresql` (bitnami default would be
+  # ai-security-customer-db) so the DSN host every consumer uses —
+  # customer-db-postgresql.platform.svc.cluster.local — resolves.
+  fullnameOverride: customer-db-postgresql
   # ☢️ Bitnami deleted versioned community tags from docker.io/bitnami/* in
   # 2025; the unchanged images live under docker.io/bitnamilegacy/*. Pin the
   # legacy mirror so a turnkey demo still pulls. (Production: use a supported

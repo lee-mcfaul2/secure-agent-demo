@@ -50,6 +50,10 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.bundle.cosignSecretName }}
                   key:  {{ .Values.bundle.cosignSecretKey }}
+            {{- else }}
+            # The published 0.1.0 image's config requires this field even
+            # though demoMode skips cosign entirely; supply an unused value.
+            - { name: GATEWAY_PROMPT_BUNDLE_COSIGN_KEY, value: "demo-unused" }
             {{- end }}
             - name: GATEWAY_AUDIT_DATABASE_URL
               valueFrom:
@@ -85,7 +89,11 @@ spec:
             periodSeconds: 5
         - name: opa
           image: "{{ .Values.opa.image }}"
-          args: ["run", "--server", "--addr=:8181", "/policy", "/data"]
+          # Load explicit files, NOT the dirs: a k8s ConfigMap volume projects
+          # ..data/ and ..<ts>/ symlink dirs, so `opa run /policy` loads
+          # authz.rego 3x -> "multiple default rules". Pointing at the files
+          # avoids the symlinked duplicates.
+          args: ["run", "--server", "--addr=:8181", "/policy/authz.rego", "/data/permissions.json"]
           ports:
             - containerPort: 8181
           volumeMounts:
