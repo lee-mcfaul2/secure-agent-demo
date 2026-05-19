@@ -43,22 +43,17 @@ customer-db:
     username: customers
     password: customers-demo-pw
     database: customers
+    # Deterministic superuser password. The agent-sql-mcp migration runs
+    # CREATE ROLE + DDL + GRANT (inherently privileged) so it connects as
+    # this `postgres` superuser (see agent-sql-mcp.database below). No
+    # dependency on bitnami initdb semantics (which run scripts as the
+    # unprivileged app user by default — the prior failure).
+    postgresPassword: postgres-demo-pw
   primary:
     # Throwaway demo DB: no persistence so every bootstrap starts from a
-    # clean cluster. This also clears the migrate "Dirty database version 1"
-    # state that a half-applied migration leaves on a persisted PVC, and
-    # guarantees the initdb script below re-runs each install.
+    # clean cluster (also clears any half-applied "Dirty database" state).
     persistence:
       enabled: false
-    initdb:
-      # Runs once (fresh data dir) as the postgres superuser. The migration
-      # Job connects as `customers` and needs CREATE ROLE for
-      # `CREATE ROLE agent_sql_mcp_runtime` in 0001_init.up.sql; the bitnami
-      # app user lacks it by default. Grant CREATEROLE (sufficient — no
-      # SUPERUSER needed; table GRANTs work because customers owns them).
-      scripts:
-        00-grant-createrole.sql: |
-          ALTER ROLE customers WITH CREATEROLE;
     service:
       type: ClusterIP
 
@@ -278,11 +273,15 @@ agent-sql-mcp:
   database:
     host: customer-db-postgresql.platform.svc.cluster.local
     port: 5432
-    user: customers
+    # postgres superuser: the migration (CREATE ROLE + DDL + GRANT) is
+    # inherently privileged. For this toy demo the single DSN is reused by
+    # the runtime too — acceptable (the security being demoed is the
+    # gateway/mTLS/authz layer, not DB least-priv; the migration still
+    # creates the agent_sql_mcp_runtime least-priv role for show).
+    # ☢️ DEMO-ONLY plaintext; matches customer-db.auth.postgresPassword.
+    user: postgres
     name: customers
-    # Matches customer-db.auth.password above. ☢️ DEMO-ONLY plaintext —
-    # consistent with the platform's other loudly-flagged baked secrets.
-    password: customers-demo-pw
+    password: postgres-demo-pw
     sslmode: disable
   oidc:
     issuer: http://dex.platform.svc.cluster.local:5556/dex
