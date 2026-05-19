@@ -6,7 +6,9 @@ metadata:
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "10"
-    "helm.sh/hook-delete-policy": before-hook-creation
+    # hook-failed too: a FAILED hook Job is not removed by helm uninstall and
+    # lingers as a cross-run ghost (same class as agent-sql-mcp-migrate).
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
 spec:
   backoffLimit: 5
   template:
@@ -17,7 +19,11 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: seed
-          image: bitnami/postgresql:16
+          # bitnami deleted versioned community tags from docker.io/bitnami/*
+          # in 2025. Reuse the exact legacy-mirror image the customer-db
+          # StatefulSet pulls (guaranteed already present on the node; has
+          # psql). Was: bitnami/postgresql:16 (404 / ImagePullBackOff).
+          image: docker.io/bitnamilegacy/postgresql:17.6.0-debian-12-r4
           env:
             - { name: PGHOST,     value: "customer-db-postgresql.platform.svc.cluster.local" }
             - { name: PGUSER,     value: "customers" }

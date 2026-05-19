@@ -188,6 +188,9 @@ fi
 # named Job (and its pods) by exact name, scoped to the mcp ns.
 kubectl -n mcp delete job agent-sql-mcp-migrate --ignore-not-found \
   --cascade=foreground --timeout=60s 2>/dev/null || true
+# Same for the customer-db-seed post-install hook Job (platform ns).
+kubectl -n "$NAMESPACE" delete job customer-db-seed --ignore-not-found \
+  --cascade=foreground --timeout=60s 2>/dev/null || true
 # stale release records, scoped to THIS release's helm secrets only
 if [ -n "$status" ] && [ "$status" != "deployed" ]; then
   kubectl -n "$NAMESPACE" delete secret -l owner=helm,name="$RELEASE" \
